@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/cart_item.dart';
+import '../providers/cart_provider.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final List<CartItem> cartItems;
@@ -11,101 +13,151 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _controllers = {
-    'name': TextEditingController(text: 'Ali Khan'),
-    'phone': TextEditingController(text: '03001234567'),
-    'email': TextEditingController(text: 'ali.khan@email.com'),
-    'address': TextEditingController(text: 'House 123, Street 45, Gulberg'),
-    'city': TextEditingController(text: 'Lahore'),
-  };
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _cityController = TextEditingController();
 
   String _paymentMethod = 'Cash on Delivery';
   String _deliveryOption = 'Standard Delivery';
-  bool _showPaymentOptions = false;
-  bool _showDeliveryOptions = false;
-
-  final List<Map<String, dynamic>> _paymentMethods = [
-    {'name': 'Cash on Delivery', 'icon': Icons.money_off_csred},
-    {'name': 'Credit/Debit Card', 'icon': Icons.credit_card},
-    {'name': 'EasyPaisa', 'icon': Icons.phone_android},
-    {'name': 'JazzCash', 'icon': Icons.phone_iphone},
-  ];
-
-  final List<Map<String, dynamic>> _deliveryOptions = [
-    {'name': 'Standard Delivery', 'time': '3-5 days', 'price': 200},
-    {'name': 'Express Delivery', 'time': '1-2 days', 'price': 500},
-    {'name': 'Same Day Delivery', 'time': 'Today', 'price': 800},
-  ];
 
   @override
   void dispose() {
-    _controllers.values.forEach((c) => c.dispose());
+    _nameController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    _addressController.dispose();
+    _cityController.dispose();
     super.dispose();
   }
 
-  double get _subtotal {
-    double total = 0;
-    for (var item in widget.cartItems) {
-      String priceStr =
-          item.price.replaceAll('Rs.', '').replaceAll(',', '').trim();
-      double price = double.tryParse(priceStr) ?? 0;
-      total += price * item.quantity;
-    }
-    return total;
-  }
-
-  double get _deliveryCharge {
-    final option =
-        _deliveryOptions.firstWhere((opt) => opt['name'] == _deliveryOption);
-    return (option['price'] as int).toDouble();
-  }
-
+  double get _subtotal => widget.cartItems.fold(0, (sum, item) => sum + item.totalPrice);
+  double get _deliveryCharge => _deliveryOption == 'Standard Delivery' ? 200 : 
+                               _deliveryOption == 'Express Delivery' ? 500 : 800;
   double get _total => _subtotal + _deliveryCharge;
 
-  void _placeOrder() {
-    if (!_formKey.currentState!.validate()) return;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirm Order'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Total: Rs.${_total.toStringAsFixed(0)}'),
-            Text('Payment: $_paymentMethod'),
-            Text('Delivery: $_deliveryOption'),
+  void _confirmOrder() {
+    if (_formKey.currentState!.validate()) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green, size: 28),
+              SizedBox(width: 8),
+              Text('Confirm Order', style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Please review your order details:'),
+              const SizedBox(height: 16),
+              _buildConfirmDetail('Total Amount', 'Rs.${_total.toStringAsFixed(0)}'),
+              _buildConfirmDetail('Payment Method', _paymentMethod),
+              _buildConfirmDetail('Delivery Option', _deliveryOption),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.green, size: 18),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'You will receive order confirmation via email.',
+                        style: TextStyle(fontSize: 12, color: Colors.green),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Review', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                // Clear the cart
+                final cartProvider = Provider.of<CartProvider>(context, listen: false);
+                cartProvider.clearCart();
+                
+                Navigator.pop(context); // Close confirm dialog
+                
+                // Show success message
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        const Icon(Icons.check_circle, color: Colors.white),
+                        const SizedBox(width: 8),
+                        const Text('Order confirmed successfully!'),
+                      ],
+                    ),
+                    backgroundColor: Colors.green,
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+                
+                // Navigate back to home screen
+                Navigator.popUntil(context, (route) => route.isFirst);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Confirm & Pay'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),    
-                  style: ElevatedButton.styleFrom(
-    backgroundColor: Colors.white, 
-    foregroundColor: Colors.redAccent, 
-  ),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Order placed successfully!'),
-                  backgroundColor: Colors.redAccent,
-                ),
-              );
-              Navigator.popUntil(context, (route) => route.isFirst);
-            },
-             style: ElevatedButton.styleFrom(
-    backgroundColor: Colors.redAccent, 
-    foregroundColor: Colors.white, 
-  ),
-            child: const Text('Confirm'),
-          ),
+      );
+    }
+  }
+
+  Widget _buildConfirmDetail(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Text('$label:', style: const TextStyle(fontWeight: FontWeight.w500)),
+          const SizedBox(width: 8),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
         ],
       ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon) {
+    return TextFormField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: Colors.grey.shade600),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+      validator: (v) => v == null || v.isEmpty ? 'Required' : null,
     );
   }
 
@@ -113,141 +165,161 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12, left: 4),
-          child: Text(title,
-              style:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: Colors.grey.shade200, width: 1),
+          ),
+          child: Padding(padding: const EdgeInsets.all(16), child: child),
         ),
-        Card(child: Padding(padding: const EdgeInsets.all(16), child: child)),
         const SizedBox(height: 24),
       ],
     );
   }
 
   Widget _buildOrderItem(CartItem item) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              image: DecorationImage(
-                image: AssetImage(item.image),
-                fit: BoxFit.cover,
+    return Row(
+      children: [
+        Container(
+          width: 60, height: 60,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            image: DecorationImage(
+              image: item.image.startsWith('http') 
+                ? NetworkImage(item.image) as ImageProvider
+                : AssetImage(item.image),
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(item.title, 
+                style: const TextStyle(fontWeight: FontWeight.w500),
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text('Qty: ${item.quantity}', 
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 4),
+              Text('Rs.${item.price}', 
+                style: TextStyle(fontSize: 13, color: Colors.redAccent, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+        Text('Rs.${item.totalPrice.toStringAsFixed(0)}', 
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDeliveryOption(String name, String time, int price, IconData icon) {
+    return GestureDetector(
+      onTap: () => setState(() => _deliveryOption = name),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: _deliveryOption == name ? Colors.redAccent : Colors.grey.shade300,
+            width: _deliveryOption == name ? 2 : 1,
+          ),
+          color: _deliveryOption == name ? Colors.redAccent.withOpacity(0.05) : Colors.transparent,
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: _deliveryOption == name ? Colors.redAccent : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(icon, 
+                color: _deliveryOption == name ? Colors.white : Colors.grey.shade600,
+                size: 20,
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.title,
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text('Qty: ${item.quantity}'),
-              ],
-            ),
-          ),
-          Text(item.price,
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold, color: Colors.red)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPriceRow(String label, String value, {bool isTotal = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: isTotal ? 18 : 14,
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-              color: isTotal ? Colors.red : Colors.black,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTextField(String key, String label, IconData icon,
-      {TextInputType? type, int lines = 1}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: TextFormField(
-        controller: _controllers[key],
-        maxLines: lines,
-        keyboardType: type,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        validator: (v) =>
-            v == null || v.isEmpty ? 'Please enter $label' : null,
-      ),
-    );
-  }
-
-  Widget _buildCollapsibleSection(
-    String title,
-    String selectedValue,
-    bool isExpanded,
-    VoidCallback onToggle,
-    List<Map<String, dynamic>> options,
-    Function(String) onSelect,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12, left: 4),
-          child: Text(title,
-              style:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        ),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(selectedValue),
-                  trailing: IconButton(
-                    icon: Icon(
-                        isExpanded ? Icons.expand_less : Icons.expand_more),
-                    onPressed: onToggle,
-                  ),
-                ),
-                if (isExpanded) ...[
-                  const Divider(),
-                  ...options.map((option) => ListTile(
-                        title: Text(option['name']),
-                        trailing: Radio<String>(
-                          value: option['name'],
-                          groupValue: selectedValue,
-                          onChanged: (v) => onSelect(v!),
-                        ),
-                        onTap: () => onSelect(option['name']),
-                      )),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: _deliveryOption == name ? Colors.redAccent : Colors.black,
+                  )),
+                  const SizedBox(height: 2),
+                  Text(time, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                 ],
-              ],
+              ),
             ),
-          ),
+            Text('Rs.$price', style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: _deliveryOption == name ? Colors.redAccent : Colors.black,
+            )),
+            const SizedBox(width: 12),
+            Radio(
+              value: name,
+              groupValue: _deliveryOption,
+              activeColor: Colors.redAccent,
+              onChanged: (value) => setState(() => _deliveryOption = value.toString()),
+            ),
+          ],
         ),
-        const SizedBox(height: 24),
-      ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentOption(String name, IconData icon, Color color) {
+    return GestureDetector(
+      onTap: () => setState(() => _paymentMethod = name),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: _paymentMethod == name ? color : Colors.grey.shade300,
+            width: _paymentMethod == name ? 2 : 1,
+          ),
+          color: _paymentMethod == name ? color.withOpacity(0.1) : Colors.transparent,
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: _paymentMethod == name ? color : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(icon, 
+                color: _paymentMethod == name ? Colors.white : color,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(name, style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: _paymentMethod == name ? color : Colors.black,
+            )),
+            const Spacer(),
+            Radio(
+              value: name,
+              groupValue: _paymentMethod,
+              activeColor: color,
+              onChanged: (value) => setState(() => _paymentMethod = value.toString()),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -258,7 +330,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         title: const Text('Checkout'),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
-        elevation: 1,
+        elevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -267,103 +339,122 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // CONTACT INFO
-              _buildSection(
-                'Contact Information',
-                Column(
-                  children: [
-                    _buildTextField('name', 'Full Name', Icons.person),
-                    _buildTextField('phone', 'Phone', Icons.phone),
-                    _buildTextField('email', 'Email', Icons.email),
-                  ],
-                ),
-              ),
+              // Contact Information
+              _buildSection('Contact Information', Column(
+                children: [
+                  _buildTextField(_nameController, 'Full Name', Icons.person_outline),
+                  const SizedBox(height: 12),
+                  _buildTextField(_phoneController, 'Phone Number', Icons.phone_outlined),
+                  const SizedBox(height: 12),
+                  _buildTextField(_emailController, 'Email Address', Icons.email_outlined),
+                ],
+              )),
 
-              // ADDRESS
-              _buildSection(
-                'Delivery Address',
-                Column(
-                  children: [
-                    _buildTextField('address', 'Address', Icons.home,
-                        lines: 2),
-                    _buildTextField('city', 'City', Icons.location_city),
-                  ],
-                ),
-              ),
+              // Delivery Address
+              _buildSection('Delivery Address', Column(
+                children: [
+                  _buildTextField(_addressController, 'Complete Address', Icons.home_outlined),
+                  const SizedBox(height: 12),
+                  _buildTextField(_cityController, 'City', Icons.location_city_outlined),
+                ],
+              )),
 
-              // DELIVERY
-              _buildCollapsibleSection(
-                'Delivery Options',
-                _deliveryOption,
-                _showDeliveryOptions,
-                () => setState(
-                    () => _showDeliveryOptions = !_showDeliveryOptions),
-                _deliveryOptions,
-                (v) => setState(() {
-                  _deliveryOption = v;
-                  _showDeliveryOptions = false;
-                }),
-              ),
+              // Delivery Options
+              _buildSection('Delivery Options', Column(
+                children: [
+                  _buildDeliveryOption('Standard Delivery', '3-5 days', 200, Icons.delivery_dining),
+                  const SizedBox(height: 8),
+                  _buildDeliveryOption('Express Delivery', '1-2 days', 500, Icons.flash_on),
+                  const SizedBox(height: 8),
+                  _buildDeliveryOption('Same Day Delivery', 'Today', 800, Icons.bolt),
+                ],
+              )),
 
-              // PAYMENT
-              _buildCollapsibleSection(
-                'Payment Method',
-                _paymentMethod,
-                _showPaymentOptions,
-                () => setState(
-                    () => _showPaymentOptions = !_showPaymentOptions),
-                _paymentMethods,
-                (v) => setState(() {
-                  _paymentMethod = v;
-                  _showPaymentOptions = false;
-                }),
-              ),
+              // Payment Method
+              _buildSection('Payment Method', Column(
+                children: [
+                  _buildPaymentOption('Cash on Delivery', Icons.money_off_csred, Colors.green),
+                  const SizedBox(height: 8),
+                  _buildPaymentOption('Credit/Debit Card', Icons.credit_card, Colors.blue),
+                  const SizedBox(height: 8),
+                  _buildPaymentOption('EasyPaisa', Icons.phone_android, Colors.orange),
+                  const SizedBox(height: 8),
+                  _buildPaymentOption('JazzCash', Icons.phone_iphone, Colors.purple),
+                ],
+              )),
 
-              // PLACE ORDER (MOVED UP)
+              // Order Summary
+              _buildSection('Order Summary', Column(
+                children: [
+                  ...widget.cartItems.map((item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _buildOrderItem(item),
+                  )),
+                  const Divider(height: 24),
+                  _buildPriceRow('Subtotal', 'Rs.${_subtotal.toStringAsFixed(0)}'),
+                  const SizedBox(height: 8),
+                  _buildPriceRow('Delivery Fee', 'Rs.${_deliveryCharge.toStringAsFixed(0)}'),
+                  const Divider(height: 24),
+                  _buildPriceRow('Total Amount', 'Rs.${_total.toStringAsFixed(0)}', isTotal: true),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.blue.shade600, size: 16),
+                      const SizedBox(width: 8),
+                      Text('Delivery charges included',
+                        style: TextStyle(fontSize: 12, color: Colors.blue.shade600),
+                      ),
+                    ],
+                  ),
+                ],
+              )),
+
+              // Confirm Order Button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _placeOrder,
+                  onPressed: _confirmOrder,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.redAccent,
-            foregroundColor: Colors.white,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
-                  child: const Text(
-                    'Confirm Order',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.shopping_bag_outlined, size: 22),
+                      SizedBox(width: 8),
+                      Text('Confirm Order', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    ],
                   ),
                 ),
               ),
-
-              // ORDER SUMMARY (AFTER PLACE ORDER)
-              Padding(
-  padding: const EdgeInsets.only(top: 24), // <-- adds margin from top
-  child: _buildSection(
-                'Order Summary',
-                Column(
-                  children: [
-                    ...widget.cartItems.map(_buildOrderItem),
-                    const Divider(),
-                    _buildPriceRow(
-                        'Subtotal', 'Rs.${_subtotal.toStringAsFixed(0)}'),
-                    _buildPriceRow(
-                        'Delivery', 'Rs.${_deliveryCharge.toStringAsFixed(0)}'),
-                    const Divider(),
-                    _buildPriceRow(
-                        'Total', 'Rs.${_total.toStringAsFixed(0)}',
-                        isTotal: true),
-                  ],
-                ),
-                ),
-              ),
+              const SizedBox(height: 32),
             ],
           ),
         ),
       ),
-    ); 
+    );
+  }
+
+  Widget _buildPriceRow(String label, String value, {bool isTotal = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(
+          fontSize: isTotal ? 16 : 14,
+          fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
+          color: isTotal ? Colors.black : Colors.grey.shade700,
+        )),
+        Text(value, style: TextStyle(
+          fontSize: isTotal ? 20 : 16,
+          fontWeight: FontWeight.bold,
+          color: isTotal ? Colors.redAccent : Colors.black,
+        )),
+      ],
+    );
   }
 }

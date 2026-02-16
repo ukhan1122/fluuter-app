@@ -6,6 +6,9 @@ import '../screens/login.dart';
 import '../screens/signup.dart';
 import '../screens/home_screen.dart';
 import '../screens/profile_screen.dart';
+import '../screens/cart_screen.dart'; 
+import 'package:provider/provider.dart'; // ADD THIS
+import '../providers/cart_provider.dart'; // ADD THIS
 
 class CustomNavbar extends StatefulWidget implements PreferredSizeWidget {
   const CustomNavbar({super.key});
@@ -96,10 +99,53 @@ class _CustomNavbarState extends State<CustomNavbar> {
         ],
       ),
       actions: [
+   
+// Add this import at the top if not already there:
+// import 'package:provider/provider.dart';
+// import '../providers/cart_provider.dart';
+
+Consumer<CartProvider>(
+  builder: (context, cartProvider, child) {
+    final itemCount = cartProvider.totalQuantity;
+    return Stack(
+      children: [
         IconButton(
-          onPressed: () {},
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CartScreen()),
+          ),
           icon: const FaIcon(FontAwesomeIcons.cartShopping, color: Colors.red),
         ),
+        if (itemCount > 0)
+          Positioned(
+            right: 8,
+            top: 8,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+              constraints: const BoxConstraints(
+                minWidth: 20,
+                minHeight: 20,
+              ),
+              child: Text(
+                itemCount > 99 ? '99+' : itemCount.toString(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
+    );
+  },
+),
+
         if (_isLoggedIn && _profilePicture != null && _profilePicture!.isNotEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),

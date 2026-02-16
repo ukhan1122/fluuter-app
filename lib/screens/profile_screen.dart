@@ -494,11 +494,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 borderRadius: BorderRadius.circular(8),
                 color: Colors.grey[200],
               ),
-              child: product.photos.isNotEmpty && product.photos.first.toString().isNotEmpty
+              child: product.photoUrls.isNotEmpty
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: Image.network(
-                        product.photos.first.toString(),
+                       product.photoUrls.first,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           return const Icon(

@@ -32,37 +32,52 @@ class _ProductGridState extends State<ProductGrid> {
     _loadProducts();
   }
 
-  void _loadProducts() {
-    print('🚀 Loading ${widget.section} products...');
-    
-    String apiGroup = _mapSectionToGroup(widget.section);
-    
-    // NO DELAYS - Let the cache handle concurrency
+ void _loadProducts() {
+  print('🚀 Loading ${widget.section} products from CACHE...');
+  
+  String apiGroup = _mapSectionToGroup(widget.section);
+  
+  // USE CACHE INSTEAD OF DIRECT API CALLS
+  _productsFuture = ProductCache.getProducts().then((allProducts) {
     if (apiGroup.isNotEmpty) {
-      _productsFuture = ApiService.fetchProductsByGroup(apiGroup);
+      // FILTER products by category group
+      final filtered = allProducts.where((product) {
+        final productGroup = product.categoryGroup?.toLowerCase() ?? '';
+        final targetGroup = apiGroup.toLowerCase();
+        
+        // Handle plural/singular variations
+        if (targetGroup == 'mens' && productGroup == 'men') return true;
+        if (targetGroup == 'womens' && productGroup == 'women') return true;
+        
+        return productGroup == targetGroup;
+      }).toList();
+      
+      print('✅ Found ${filtered.length} ${widget.section} products in cache');
+      return filtered;
     } else {
-      _productsFuture = ApiService.fetchProducts();
+      return allProducts;
     }
-    
-    if (mounted) {
-      setState(() {});
-    }
+  });
+  
+  if (mounted) {
+    setState(() {});
   }
+}
 
-  String _mapSectionToGroup(String section) {
-    switch (section.toLowerCase()) {
-      case 'men':
-        return 'mens';
-      case 'women':
-        return 'womens';
-      case 'kids':
-        return 'kids';  
-      case 'wedding':  // ADD THIS
-      return 'wedding';
-      default:
-        return '';
-    }
+String _mapSectionToGroup(String section) {
+  switch (section.toLowerCase()) {
+    case 'men':
+      return 'mens';
+    case 'women':
+      return 'womens';
+    case 'kids':
+      return 'kids';  
+    case 'wedding':
+      return 'womens'; // ← CHANGE THIS to 'womens' instead of 'wedding'
+    default:
+      return '';
   }
+}
 
   void _scrollProducts(int direction) {
     try {
@@ -378,54 +393,45 @@ class _ProductGridState extends State<ProductGrid> {
         ),
       );
 
-  Widget _buildProductImage(Product product) {
-    if (product.photos.isEmpty) {
-      return _buildPlaceholderImage();
-    }
-    
-    final firstPhoto = product.photos.first;
-    String? imageUrl;
-    
-    if (firstPhoto is Map<String, dynamic>) {
-      imageUrl = firstPhoto['image_path']?.toString() ??
-                 firstPhoto['url']?.toString() ??
-                 firstPhoto['image']?.toString();
-    } else if (firstPhoto is Map) {
-      imageUrl = firstPhoto['image_path']?.toString();
-    } else if (firstPhoto is String) {
-      imageUrl = firstPhoto;
-    }
-    
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      if (!imageUrl.startsWith('http')) {
-        imageUrl = 'https://$imageUrl';
-      }
-      
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Image.network(
-          imageUrl,
-          fit: BoxFit.cover,
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return Center(
-              child: CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded / 
-                      loadingProgress.expectedTotalBytes!
-                    : null,
-              ),
-            );
-          },
-          errorBuilder: (context, error, stackTrace) {
-            return _buildPlaceholderImage();
-          },
-        ),
-      );
-    } else {
-      return _buildPlaceholderImage();
-    }
+Widget _buildProductImage(Product product) {
+  if (product.photoUrls.isEmpty) {
+    return _buildPlaceholderImage();
   }
+  
+  // Get the first photo URL directly (it's already a String)
+  String imageUrl = product.photoUrls.first;
+  
+  if (imageUrl.isNotEmpty) {
+    // Ensure URL has protocol
+    if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+      imageUrl = 'https://$imageUrl';
+    }
+    
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.network(
+        imageUrl,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded / 
+                    loadingProgress.expectedTotalBytes!
+                  : null,
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          return _buildPlaceholderImage();
+        },
+      ),
+    );
+  } else {
+    return _buildPlaceholderImage();
+  }
+}
 
   Widget _buildPlaceholderImage() {
     return Container(

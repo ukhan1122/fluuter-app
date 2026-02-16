@@ -3,53 +3,57 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/product.dart';
 import 'dart:io'; 
+import 'auth_service.dart';  // Add this import
+
 
 class ProductCache {
   static List<Product>? _cachedProducts;
   static Future<List<Product>>? _loadingFuture;
   static bool _isLoading = false;
   
-  static Future<List<Product>> getProducts() async {
-    if (_cachedProducts != null) {
-      print('📦 Returning cached products');
-      return _cachedProducts!;
-    }
-    
-    if (_isLoading && _loadingFuture != null) {
-      print('⏳ Request waiting for ongoing load...');
-      return await _loadingFuture!;
-    }
-    
-    print('📦 Loading products into cache...');
-    _isLoading = true;
-    _loadingFuture = _fetchProductsWithRetry();
-    
-    try {
-      _cachedProducts = await _loadingFuture!;
-      print('✅ Products loaded into cache');
-      return _cachedProducts!;
-    } finally {
-      _isLoading = false;
-      _loadingFuture = null;
-    }
+static Future<List<Product>> getProducts({int limit = 20}) async {
+  if (_cachedProducts != null) {
+    print('📦 Returning ${_cachedProducts!.length} cached products');
+    return _cachedProducts!;
   }
   
-  static Future<List<Product>> _fetchProductsWithRetry() async {
-    for (int attempt = 1; attempt <= 3; attempt++) {
-      try {
-        print('🔄 Attempt $attempt/3 to fetch products');
-        return await ApiService.fetchProducts();
-      } catch (e) {
-        if (attempt == 3) {
-          print('❌ All 3 attempts failed');
-          rethrow;
-        }
-        print('⚠️ Attempt $attempt failed, retrying...');
-        await Future.delayed(Duration(seconds: attempt * 2));
-      }
-    }
-    return [];
+  if (_isLoading && _loadingFuture != null) {
+    print('⏳ Request waiting for ongoing load...');
+    return await _loadingFuture!;
   }
+  
+  print('📦 Loading products into cache (limit: $limit)...');
+  _isLoading = true;
+  _loadingFuture = _fetchProductsWithRetry(limit: limit);
+  
+  try {
+    _cachedProducts = await _loadingFuture!;
+    print('✅ ${_cachedProducts!.length} products loaded into cache');
+    return _cachedProducts!;
+  } finally {
+    _isLoading = false;
+    _loadingFuture = null;
+  }
+}
+
+static Future<List<Product>> _fetchProductsWithRetry({int limit = 20}) async {
+  for (int attempt = 1; attempt <= 3; attempt++) {
+    try {
+      print('🔄 Attempt $attempt/3 to fetch products (limit: $limit)');
+      return await ApiService.fetchProducts(limit: limit);
+    } catch (e) {
+      if (attempt == 3) {
+        print('❌ All 3 attempts failed');
+        rethrow;
+      }
+      print('⚠️ Attempt $attempt failed, retrying...');
+      await Future.delayed(Duration(seconds: attempt * 2));
+    }
+  }
+  return [];
+}
+  
+  
   
   static void clearCache() {
     _cachedProducts = null;
@@ -60,15 +64,17 @@ class ProductCache {
 }
 
 class ApiService {
-  static const String baseUrl = "https://untimid-nonobjectivistic-wade.ngrok-free.dev";
+  // static const String baseUrl = "https://untimid-nonobjectivistic-wade.ngrok-free.dev";
+static const String baseUrl = 'http://10.0.2.2:80';
   
   // SIMPLIFIED HEADERS
-  static Map<String, String> get _headers {
-    return {
-      'Accept': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    };
-  }
+static Map<String, String> get _headers {
+  return {
+    'Accept': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
+    'Host': 'depop-backend.test',  // ADD THIS LINE
+  };
+} 
   
   // NEW: Minimal test method
   static Future<void> testMinimalRequest() async {
@@ -114,102 +120,103 @@ class ApiService {
   }
 }
   
-  static Future<List<Product>> fetchProducts() async {
-    print('🛍️ Fetching products from API...');
+  static Future<List<Product>> fetchProducts({
+  int page = 1,
+  int limit = 12, // Default to 12 items (you can change this)
+  String? category,
+}) async {
+  print('🛍️ Fetching products - Page: $page, Limit: $limit${category != null ? ", Category: $category" : ""}');
+  
+  try {
+    final stopwatch = Stopwatch()..start();
     
-    try {
-      final stopwatch = Stopwatch()..start();
-      final url = Uri.parse('$baseUrl/api/v1/listing/public/products/show');
+    // Build URL with pagination parameters
+    String urlStr = '$baseUrl/api/v1/listing/public/products/show?page=$page&limit=$limit';
+    if (category != null && category.isNotEmpty) {
+      urlStr += '&category=$category';
+    }
+    
+    final url = Uri.parse(urlStr);
+    
+    print('🌐 URL: $url');
+    print('📨 Headers: $_headers');
+    
+    final response = await http.get(url, headers: _headers)
+        .timeout(const Duration(seconds: 30));
+    
+    stopwatch.stop();
+    print('⏱️ Request took: ${stopwatch.elapsedMilliseconds}ms');
+    print('📊 HTTP Status: ${response.statusCode}');
+    
+    if (response.statusCode == 200) {
+      print('✅ API call successful!');
       
-      print('🌐 URL: $url');
-      print('📨 Headers: $_headers');
+      final Map<String, dynamic> responseData = json.decode(response.body);
       
-      final response = await http.get(url, headers: _headers)
-          .timeout(const Duration(seconds: 30));
-      
-      stopwatch.stop();
-      print('⏱️ Request took: ${stopwatch.elapsedMilliseconds}ms');
-      print('📊 HTTP Status: ${response.statusCode}');
-      
-      if (response.statusCode == 200) {
-        print('✅ API call successful!');
+      if (responseData.containsKey('data') && responseData['data'] is List) {
+        final List<dynamic> productsJson = responseData['data'];
+        print('🎉 Found ${productsJson.length} products for page $page');
         
-        final Map<String, dynamic> responseData = json.decode(response.body);
-        
-        if (responseData.containsKey('data') && responseData['data'] is List) {
-          final List<dynamic> productsJson = responseData['data'];
-          print('🎉 Found ${productsJson.length} products');
-          
-          List<Product> products = [];
-          for (var json in productsJson) {
-            try {
-              products.add(Product.fromJson(json));
-            } catch (e) {
-              print('⚠️ Error parsing product: $e');
-            }
+        List<Product> products = [];
+        for (var json in productsJson) {
+          try {
+            products.add(Product.fromJson(json));
+          } catch (e) {
+            print('⚠️ Error parsing product: $e');
           }
-          
-          print('✅ Successfully parsed ${products.length} products');
-          return products;
-        } else {
-          print('❌ Unexpected response structure');
-          return [];
         }
+        
+        print('✅ Successfully parsed ${products.length} products');
+        return products;
       } else {
-        print('❌ API returned error: ${response.statusCode}');
-        print('❌ Response: ${response.body}');
+        print('❌ Unexpected response structure');
         return [];
       }
-    } on TimeoutException {
-      print('⏰ Timeout after 30 seconds');
-      throw TimeoutException('API request timeout');
-    } catch (e) {
-      print('❌ Exception during API call: $e');
-      rethrow;
-    }
-  }
-  
-  static Future<List<Product>> fetchProductsByGroup(String group) async {
-    print('🛍️ Filtering $group products locally...');
-    
-    try {
-      final allProducts = await ProductCache.getProducts();
-      
-      if (allProducts.isEmpty) return [];
-      
-      switch (group.toLowerCase()) {
-        case 'men':
-          return allProducts.where((product) {
-            final groupName = product.categoryGroup?.toLowerCase() ?? '';
-            return groupName.contains('men') || groupName.contains('mens');
-          }).toList();
-          
-        case 'women':
-          return allProducts.where((product) {
-            final groupName = product.categoryGroup?.toLowerCase() ?? '';
-            return groupName.contains('women') || groupName.contains('womens');
-          }).toList();
-          
-        case 'kids':
-          return allProducts.where((product) {
-            final groupName = product.categoryGroup?.toLowerCase() ?? '';
-            return groupName.contains('kid') || groupName.contains('child');
-          }).toList();
-          
-        case 'wedding':
-          return allProducts.where((product) {
-            final groupName = product.categoryGroup?.toLowerCase() ?? '';
-            return groupName.contains('wedding');
-          }).toList();
-          
-        default:
-          return allProducts;
-      }
-    } catch (e) {
-      print('❌ Error filtering products: $e');
+    } else {
+      print('❌ API returned error: ${response.statusCode}');
+      print('❌ Response: ${response.body}');
       return [];
     }
+  } on TimeoutException {
+    print('⏰ Timeout after 30 seconds');
+    throw TimeoutException('API request timeout');
+  } catch (e) {
+    print('❌ Exception during API call: $e');
+    rethrow;
   }
+}
+  
+ static Future<List<Product>> fetchProductsByGroup(String group, {int page = 1, int limit = 12}) async {
+  print('🛍️ Fetching $group products from API - Page: $page, Limit: $limit');
+  
+  // Map the group to backend category name
+  String? backendCategory;
+  switch (group.toLowerCase()) {
+    case 'men':
+    case 'mens':
+      backendCategory = 'men';
+      break;
+    case 'women':
+    case 'womens':
+      backendCategory = 'women';
+      break;
+    case 'kids':
+      backendCategory = 'kids';
+      break;
+    case 'wedding':
+      backendCategory = 'wedding';
+      break;
+    default:
+      backendCategory = null;
+  }
+  
+  // Use the updated fetchProducts method with category filter
+  return fetchProducts(
+    page: page,
+    limit: limit,
+    category: backendCategory,
+  );
+}
 
   // ============ AUTHENTICATION METHODS ============
 
@@ -226,7 +233,8 @@ class ApiService {
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
+          'ngrok-skip-browser-warning': 'true',   
+          'Host': 'depop-backend.test',  // ✅ ADD THIS LINE
         },
         body: jsonEncode({
           'login': login,           // IMPORTANT: Uses 'login' field
@@ -478,7 +486,8 @@ static Future<List<Product>> getUserProducts(String token, {String status = 'all
       headers: {
         'Accept': 'application/json',
         'Authorization': 'Bearer $token',
-        'ngrok-skip-browser-warning': 'true',
+        'ngrok-skip-browser-warning': 'true',  
+         'Host': 'depop-backend.test',
       },
     ).timeout(const Duration(seconds: 15));
 
@@ -937,9 +946,9 @@ static Future<List<Map<String, dynamic>>> getBrands() async {
   }
 }
 
-// ============ UPDATED CREATE LISTING METHOD ============
 
-// Update your existing createListing method to add images parameter
+// ============ UPDATED CREATE LISTING METHOD WITH EXACT LARAVEL FIELD NAMES ============
+
 static Future<Map<String, dynamic>> createListing({
   required String token,
   required Map<String, dynamic> listingData,
@@ -947,61 +956,118 @@ static Future<Map<String, dynamic>> createListing({
 }) async {
   print('📝 Creating new listing with ${images.length} images');
   
+  // CORRECT ENDPOINT
+  final endpoint = '$baseUrl/api/v1/listing/auth/products/create';
+  
+  print('🚀 Using endpoint: $endpoint');
+  
   try {
-    // Create multipart request if we have images
-    if (images.isNotEmpty) {
-      print('📸 Uploading images via multipart request');
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$baseUrl/api/v1/listing/auth/products/create'),
-      );
-      
-      // Add headers
-      request.headers['Accept'] = 'application/json';
-      request.headers['Authorization'] = 'Bearer $token';
-      request.headers['ngrok-skip-browser-warning'] = 'true';
-      
-      // Add text fields
-      listingData.forEach((key, value) {
-        if (value != null) {
-          request.fields[key] = value.toString();
-        }
-      });
-      
-      // Add image files
-      for (int i = 0; i < images.length; i++) {
-        var imageFile = File(images[i]);
-        if (await imageFile.exists()) {
-          var multipartFile = await http.MultipartFile.fromPath(
-            'images[$i]', // API expects images[0], images[1], etc.
-            imageFile.path,
-          );
-          request.files.add(multipartFile);
-          print('📸 Added image ${i + 1}: ${imageFile.path}');
-        }
-      }
-      
-      // Send multipart request
-      var streamedResponse = await request.send();
-      var response = await http.Response.fromStream(streamedResponse);
-      
-      return _handleCreateListingResponse(response);
-    } else {
-      // No images, use regular POST
-      print('📤 Creating listing without images');
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/v1/listing/auth/products/create'),
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-          'ngrok-skip-browser-warning': 'true',
-        },
-        body: jsonEncode(listingData),
-      ).timeout(const Duration(seconds: 30));
-
-      return _handleCreateListingResponse(response);
+    var request = http.MultipartRequest('POST', Uri.parse(endpoint));
+    
+    // Headers
+    request.headers['Accept'] = 'application/json';
+    request.headers['Authorization'] = 'Bearer $token';
+    request.headers['ngrok-skip-browser-warning'] = 'true';
+    
+    print('📤 SENDING DATA TO LARAVEL:');
+    
+    // ====== EXACT FIELDS LARAVEL EXPECTS (based on validation errors) ======
+    
+    // 1. BASIC PRODUCT INFO (REQUIRED)
+    request.fields['title'] = listingData['title']?.toString() ?? '';
+    request.fields['description'] = listingData['description']?.toString() ?? '';
+    request.fields['price'] = listingData['price']?.toString() ?? '0';
+    request.fields['quantity'] = listingData['quantity']?.toString() ?? '1';
+    
+    // 2. CATEGORY & BRAND (REQUIRED) - Laravel expects 'brand_name' not 'brand'
+    request.fields['category_id'] = listingData['category_id']?.toString() ?? '';
+    request.fields['brand_name'] = listingData['brand_name']?.toString() ?? listingData['brand']?.toString() ?? ''; // FIXED: brand_name
+    
+    // 3. CONDITION (REQUIRED)
+    request.fields['condition_id'] = listingData['condition_id']?.toString() ?? '';
+    
+    // 4. SIZE (REQUIRED)
+    request.fields['size'] = listingData['size']?.toString() ?? '';
+    
+    // 5. LOCATION FIELDS (CRITICAL - Laravel expects these directly, not just address_id)
+    request.fields['location'] = listingData['location']?.toString() ?? listingData['address_line1']?.toString() ?? ''; // FIXED: location
+    request.fields['city'] = listingData['city']?.toString() ?? ''; // FIXED: city
+    
+    // 6. ADDRESS_ID (optional - for linking to user address)
+    if (listingData.containsKey('address_id') && listingData['address_id'] != null) {
+      request.fields['address_id'] = listingData['address_id']!.toString();
+      print('📍 Using address_id: ${listingData['address_id']}');
     }
+    
+    // 7. Add state, zip_code, country if available
+    if (listingData.containsKey('state') && listingData['state'] != null) {
+      request.fields['state'] = listingData['state']!.toString();
+    }
+    if (listingData.containsKey('zip_code') && listingData['zip_code'] != null) {
+      request.fields['zip_code'] = listingData['zip_code']!.toString();
+    }
+    if (listingData.containsKey('country') && listingData['country'] != null) {
+      request.fields['country'] = listingData['country']!.toString();
+    }
+    
+    // 8. OPTIONAL FIELDS
+    if (listingData.containsKey('allow_offers') && listingData['allow_offers'] != null) {
+      request.fields['allow_offers'] = listingData['allow_offers']!.toString();
+    }
+    
+    if (listingData.containsKey('shipping_type') && listingData['shipping_type'] != null) {
+      request.fields['shipping_type'] = listingData['shipping_type']!.toString();
+    }
+    
+    // 9. MEASUREMENTS (OPTIONAL)
+    if (listingData.containsKey('chest_size') && listingData['chest_size'] != null) {
+      request.fields['chest_size'] = listingData['chest_size']!.toString();
+    }
+    if (listingData.containsKey('waist_size') && listingData['waist_size'] != null) {
+      request.fields['waist_size'] = listingData['waist_size']!.toString();
+    }
+    if (listingData.containsKey('hips_size') && listingData['hips_size'] != null) {
+      request.fields['hips_size'] = listingData['hips_size']!.toString();
+    }
+    if (listingData.containsKey('inseam_size') && listingData['inseam_size'] != null) {
+      request.fields['inseam_size'] = listingData['inseam_size']!.toString();
+    }
+    if (listingData.containsKey('sleeve_size') && listingData['sleeve_size'] != null) {
+      request.fields['sleeve_size'] = listingData['sleeve_size']!.toString();
+    }
+    if (listingData.containsKey('shoulder_size') && listingData['shoulder_size'] != null) {
+      request.fields['shoulder_size'] = listingData['shoulder_size']!.toString();
+    }
+    
+    // 10. STATUS FIELDS
+    request.fields['active'] = 'true';
+    request.fields['sold'] = 'false';
+    
+    // Debug all fields
+    print('📋 FIELDS BEING SENT (with Laravel names):');
+    request.fields.forEach((key, value) {
+      print('   $key: $value');
+    });
+    
+    // 11. IMAGES
+    for (int i = 0; i < images.length; i++) {
+      var imageFile = File(images[i]);
+      if (await imageFile.exists()) {
+        var multipartFile = await http.MultipartFile.fromPath(
+          'images[]',
+          imageFile.path,
+        );
+        request.files.add(multipartFile);
+        print('📸 Added image ${i + 1}: ${imageFile.path}');
+      }
+    }
+    
+    print('🚀 Sending request with ${request.files.length} images...');
+    
+    var streamedResponse = await request.send();
+    var response = await http.Response.fromStream(streamedResponse);
+    
+    return _handleCreateListingResponse(response);
     
   } on TimeoutException {
     print('⏰ Create listing timeout');
@@ -1112,5 +1178,407 @@ if (response.statusCode == 400) {
 
 
 
+
+// Add these methods to your ApiService class:
+
+// ============ SELLER PROFILE API METHODS ============
+
+/// 1. GET SELLER PROFILE - From users.php
+/// Endpoint: GET /api/v1/users/{userId}/profile
+
+static Future<Map<String, dynamic>> getSellerProfile(String sellerId) async {
+  print('👤 Fetching seller profile for ID: $sellerId');
+  
+  try {
+    // Get token from AuthService
+    final authService = AuthService();
+    await authService.isLoggedIn(); // This loads the token from prefs
+    final token = authService.token;
+    
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/users/$sellerId/profile'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': token != null ? 'Bearer $token' : '',
+        'ngrok-skip-browser-warning': 'true',   
+          'Host': 'depop-backend.test',
+      },
+    ).timeout(const Duration(seconds: 10));
+
+    print('📡 Profile Response Status: ${response.statusCode}');
+    
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> responseData = json.decode(response.body);
+      print('✅ Seller profile fetched successfully');
+      return {
+        'success': true,
+        'data': responseData['data'] ?? responseData,
+      };
+    } else {
+      return {
+        'success': false,
+        'error': 'Failed to load seller profile: ${response.statusCode}'
+      };
+    }
+  } catch (e) {
+    print('❌ Error fetching seller profile: $e');
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+/// 2. GET SELLER SHOP INFO - From shop.php
+
+static Future<Map<String, dynamic>> getSellerShop(String sellerId) async {
+  print('🏪 Fetching shop info for seller: $sellerId');
+  
+  try {
+    final authService = AuthService();
+    await authService.isLoggedIn();
+    final token = authService.token;
+    
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/shop/$sellerId/shop'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': token != null ? 'Bearer $token' : '',
+        'ngrok-skip-browser-warning': 'true', 
+        'Host': 'depop-backend.test',
+      },
+    ).timeout(const Duration(seconds: 10));
+
+    print('📡 Shop Response Status: ${response.statusCode}');
+    
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> responseData = json.decode(response.body);
+      print('✅ Shop info fetched successfully');
+      return {
+        'success': true,
+        'data': responseData['data'] ?? responseData,
+      };
+    } else {
+      return {'success': false, 'error': 'Failed to load shop info'};
+    }
+  } catch (e) {
+    print('❌ Error fetching shop info: $e');
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+/// 3. GET SELLER RATINGS - From ratings.php
+/// Endpoint: GET /api/v1/users/{userId}/ratings
+static Future<Map<String, dynamic>> getSellerRatings(String sellerId) async {
+  print('⭐ Fetching ratings for seller: $sellerId');
+  
+  try {
+    final authService = AuthService();
+    await authService.isLoggedIn();
+    final token = authService.token;
+    
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/users/$sellerId/ratings'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': token != null ? 'Bearer $token' : '',
+        'ngrok-skip-browser-warning': 'true', 
+          'Host': 'depop-backend.test',
+      },
+    ).timeout(const Duration(seconds: 10));
+
+    print('📡 Ratings Response Status: ${response.statusCode}');
+    
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> responseData = json.decode(response.body);
+      final data = responseData['data'] ?? responseData;
+      
+      return {
+        'success': true,
+        'average': data['average_rating'] ?? 0.0,
+        'count': data['total_ratings'] ?? 0,
+        'data': data,
+      };
+    } else {
+      return {'success': false, 'average': 0.0, 'count': 0};
+    }
+  } catch (e) {
+    print('❌ Error fetching ratings: $e');
+    return {'success': false, 'average': 0.0, 'count': 0};
+  }
+}
+
+/// 4. GET SELLER REVIEWS - From reviews.php
+/// Endpoint: GET /api/v1/users/{userId}/reviews
+static Future<List<Map<String, dynamic>>> getSellerReviews(String sellerId) async {
+  print('📝 Fetching reviews for seller: $sellerId');
+  
+  try {
+    final authService = AuthService();
+    await authService.isLoggedIn();
+    final token = authService.token;
+    
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/users/$sellerId/reviews'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': token != null ? 'Bearer $token' : '',
+        'ngrok-skip-browser-warning': 'true',
+      },
+    ).timeout(const Duration(seconds: 10));
+
+    print('📡 Reviews Response Status: ${response.statusCode}');
+    
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> responseData = json.decode(response.body);
+      final List<dynamic> reviewsJson = responseData['data'] ?? responseData['reviews'] ?? [];
+      
+      return reviewsJson.map((json) => json as Map<String, dynamic>).toList();
+    } else {
+      return [];
+    }
+  } catch (e) {
+    print('❌ Error fetching reviews: $e');
+    return [];
+  }
+}
+
+
+/// 5. GET USER STATS - From users.php
+/// Endpoint: GET /api/v1/users/user/stats (requires auth)
+static Future<Map<String, dynamic>> getUserStats() async {
+  print('📊 Fetching user stats');
+  
+  try {
+    final authService = AuthService();
+    await authService.isLoggedIn();
+    final token = authService.token;
+    
+    if (token == null) {
+      return {'success': false, 'error': 'Not authenticated'};
+    }
+    
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/users/user/stats'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+        'ngrok-skip-browser-warning': 'true',
+      },
+    ).timeout(const Duration(seconds: 10));
+
+    print('📡 Stats Response Status: ${response.statusCode}');
+    
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> responseData = json.decode(response.body);
+      return {
+        'success': true,
+        'data': responseData['data'] ?? responseData,
+      };
+    } else {
+      return {'success': false};
+    }
+  } catch (e) {
+    print('❌ Error fetching stats: $e');
+    return {'success': false};
+  }
+}
+
+/// 6. FOLLOW/UNFOLLOW METHODS - From followers.php
+
+/// Follow a user
+
+static Future<bool> followUser(String userId) async {
+  print('➕ Following user: $userId');
+  
+  try {
+    final authService = AuthService();
+    await authService.isLoggedIn();
+    final token = authService.token;
+    
+    if (token == null) return false;
+    
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/users/$userId/follow'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true', 
+        'Host': 'depop-backend.test',
+      },
+    ).timeout(const Duration(seconds: 10));
+
+    print('📡 Follow Response Status: ${response.statusCode}');
+    return response.statusCode == 200 || response.statusCode == 201;
+    
+  } catch (e) {
+    print('❌ Error following user: $e');
+    return false;
+  }
+}
+
+/// Unfollow a user
+/// Endpoint: DELETE /api/v1/users/{userId}/unfollow
+static Future<bool> unfollowUser(String userId) async {
+  print('➖ Unfollowing user: $userId');
+  
+  try {
+    final authService = AuthService();
+    await authService.isLoggedIn();
+    final token = authService.token;
+    
+    if (token == null) return false;
+    
+    final response = await http.delete(
+      Uri.parse('$baseUrl/api/v1/users/$userId/unfollow'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+        'ngrok-skip-browser-warning': 'true', 
+          'Host': 'depop-backend.test',
+      },
+    ).timeout(const Duration(seconds: 10));
+
+    print('📡 Unfollow Response Status: ${response.statusCode}');
+    return response.statusCode == 200 || response.statusCode == 204;
+    
+  } catch (e) {
+    print('❌ Error unfollowing user: $e');
+    return false;
+  }
+}
+
+/// Get current user's followers
+static Future<List<Map<String, dynamic>>> getMyFollowers() async {
+  print('👥 Fetching my followers');
+  
+  try {
+    final authService = AuthService();
+    await authService.isLoggedIn();
+    final token = authService.token;
+    
+    if (token == null) return [];
+    
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/users/followers'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+        'ngrok-skip-browser-warning': 'true',
+      },
+    ).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> responseData = json.decode(response.body);
+      final List<dynamic> followersJson = responseData['data'] ?? responseData['followers'] ?? [];
+      return followersJson.map((json) => json as Map<String, dynamic>).toList();
+    }
+    return [];
+    
+  } catch (e) {
+    print('❌ Error fetching followers: $e');
+    return [];
+  }
+}
+
+/// Get users current user is following
+
+static Future<List<Map<String, dynamic>>> getMyFollowing() async {
+  print('👥 Fetching users I follow');
+  
+  try {
+    final authService = AuthService();
+    await authService.isLoggedIn();
+    final token = authService.token;
+    
+    if (token == null) return [];
+    
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/users/following'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+        'ngrok-skip-browser-warning': 'true',
+      },
+    ).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> responseData = json.decode(response.body);
+      final List<dynamic> followingJson = responseData['data'] ?? responseData['following'] ?? [];
+      return followingJson.map((json) => json as Map<String, dynamic>).toList();
+    }
+    return [];
+    
+  } catch (e) {
+    print('❌ Error fetching following: $e');
+    return [];
+  }
+}
+
+static Future<bool> checkIfFollowing(String userId) async {
+  print('🔍 Checking if following user: $userId');
+  
+  try {
+    final following = await getMyFollowing();
+    return following.any((user) => user['id'].toString() == userId);
+  } catch (e) {
+    return false;
+  }
+}
+
+static Future<List<Product>> getSellerProducts(String sellerId) async {
+  print('📦 Fetching products for seller: $sellerId');
+  
+  try {
+    final authService = AuthService();
+    await authService.isLoggedIn();
+    final token = authService.token;
+    
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/listing/seller/$sellerId'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': token != null ? 'Bearer $token' : '',
+        'ngrok-skip-browser-warning': 'true',
+        'Host': 'depop-backend.test',
+      },
+    ).timeout(const Duration(seconds: 10));
+
+    print('📡 Seller Products Status: ${response.statusCode}');
+    
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> responseData = json.decode(response.body);
+      print('📡 Seller Products Response: $responseData');
+      
+      // Handle nested data structure
+      List<dynamic> productsJson = [];
+      
+      if (responseData.containsKey('data') && responseData['data'] is Map) {
+        // If data contains a 'products' key with pagination
+        if (responseData['data'].containsKey('products')) {
+          final productsData = responseData['data']['products'];
+          if (productsData is Map && productsData.containsKey('data')) {
+            productsJson = productsData['data'] as List;
+          }
+        }
+        // If data is directly an array
+        else if (responseData['data'] is List) {
+          productsJson = responseData['data'];
+        }
+      } else if (responseData.containsKey('products') && responseData['products'] is List) {
+        productsJson = responseData['products'];
+      } else if (responseData.containsKey('data') && responseData['data'] is List) {
+        productsJson = responseData['data'];
+      }
+      
+      print('✅ Found ${productsJson.length} products for seller');
+      
+      return productsJson.map((json) => Product.fromJson(json)).toList();
+    }
+    return [];
+    
+  } catch (e) {
+    print('❌ Error fetching seller products: $e');
+    return [];
+  }
+}
 
 }

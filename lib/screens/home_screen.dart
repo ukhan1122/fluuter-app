@@ -1,9 +1,10 @@
-// lib/screens/home_screen.dart - UPDATED
+// lib/screens/home_screen.dart - OPTIMIZED
 import 'package:flutter/material.dart';
 import '../widgets/hero_slider.dart';
 import '../widgets/category_tags.dart';
 import '../widgets/product_grid.dart';
 import '../widgets/navbar.dart';
+import '../services/api_service.dart'; // Add this import
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,6 +16,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String? selectedCategory;
   bool _isInitialLoad = true;
+  bool _productsLoaded = false; // Track if products are loaded
   
   @override
   void initState() {
@@ -24,7 +26,26 @@ class _HomeScreenState extends State<HomeScreen> {
   
   void _preloadProducts() async {
     print('🚀 Preloading products at app startup...');
-    _isInitialLoad = false;
+    
+    try {
+      // Load ALL products at once using ProductCache
+      await ProductCache.getProducts(limit: 50);
+      
+      if (mounted) {
+        setState(() {
+          _isInitialLoad = false;
+          _productsLoaded = true;
+        });
+      }
+      print('✅ Products preloaded successfully!');
+    } catch (e) {
+      print('❌ Error preloading products: $e');
+      if (mounted) {
+        setState(() {
+          _isInitialLoad = false;
+        });
+      }
+    }
   }
 
   void onCategorySelected(String? category) {
@@ -52,15 +73,15 @@ class _HomeScreenState extends State<HomeScreen> {
             
             // Show loading indicator only for first load
             if (_isInitialLoad)
-              _buildInitialLoading(),
-            
-            // KEY CHANGE HERE:
-            // When showing ALL categories: use horizontal (isHorizontal: true)
-            // When showing SINGLE category: use grid (isHorizontal: false)
-            ...categoriesToShow.map((cat) => ProductGrid(
-              section: cat,
-              isHorizontal: selectedCategory == null, // True for all, false for single
-            )).toList(),
+              _buildInitialLoading()
+            else if (!_productsLoaded)
+              _buildErrorLoading()
+            else
+              // Show products grid - now using cached data!
+              ...categoriesToShow.map((cat) => ProductGrid(
+                section: cat,
+                isHorizontal: selectedCategory == null, // True for all, false for single
+              )).toList(),
           ],
         ),
       ),
@@ -72,9 +93,32 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: EdgeInsets.all(20),
       child: Column(
         children: [
-          CircularProgressIndicator(),
-          SizedBox(height: 10),
-          Text('Loading products...'),
+          const CircularProgressIndicator(),
+          const SizedBox(height: 10),
+          const Text('Loading products...'),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildErrorLoading() {
+    return Container(
+      padding: EdgeInsets.all(20),
+      child: Column(
+        children: [
+          const Icon(Icons.error_outline, color: Colors.red, size: 40),
+          const SizedBox(height: 10),
+          const Text('Failed to load products'),
+          const SizedBox(height: 10),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                _isInitialLoad = true;
+              });
+              _preloadProducts();
+            },
+            child: const Text('Try Again'),
+          ),
         ],
       ),
     );

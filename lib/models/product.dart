@@ -16,7 +16,7 @@ class Product {
   final String? categoryGroup;
   final String? brandName;
   final String? conditionTitle;
-  final List<dynamic> photos;
+  final List<String> photoUrls; 
   final Map<String, dynamic>? size;
   final Map<String, dynamic> user;
 
@@ -37,12 +37,31 @@ class Product {
     this.categoryGroup,
     this.brandName,
     this.conditionTitle,
-    required this.photos,
+    required this.photoUrls,
     this.size,
     required this.user,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
+
+      final List<String> extractedPhotoUrls = [];
+    
+    if (json['photos'] != null && json['photos'] is List) {
+      final photosList = json['photos'] as List;
+      
+      for (var photo in photosList) {
+        if (photo is Map) {
+          // Extract image_path from photo object
+          final imagePath = photo['image_path']?.toString();
+          if (imagePath != null && imagePath.isNotEmpty) {
+            extractedPhotoUrls.add(imagePath);
+          }
+        } else if (photo is String && photo.isNotEmpty) {
+          // If photo is already a string URL
+          extractedPhotoUrls.add(photo);
+        }
+      }
+    }
     return Product(
       id: json['id'] ?? 0,
       title: json['title'] ?? '',
@@ -60,7 +79,7 @@ class Product {
       categoryGroup: json['category']?['group'],
       brandName: json['brand']?['name'],
       conditionTitle: json['condition']?['title'],
-      photos: json['photos'] ?? [],
+      photoUrls: extractedPhotoUrls, // Use the extracted URLs here
       size: json['size'],
       user: json['user'] ?? {},
     );
