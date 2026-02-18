@@ -1,6 +1,7 @@
 // lib/models/product.dart
 class Product {
   final int id;
+  final int userId;  // ← This is correct - field declaration
   final String title;
   final String description;
   final double price;
@@ -22,6 +23,7 @@ class Product {
 
   Product({
     required this.id,
+    required this.userId,  // ← ADD THIS
     required this.title,
     required this.description,
     required this.price,
@@ -64,6 +66,7 @@ class Product {
     }
     return Product(
       id: json['id'] ?? 0,
+      userId: json['user_id'] ?? 0,  // ← ADD THIS LINE
       title: json['title'] ?? '',
       description: json['description'] ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
@@ -84,4 +87,37 @@ class Product {
       user: json['user'] ?? {},
     );
   }
+
+Map<String, dynamic> toJson() {
+    // Reconstruct the photos array in the same format as fromJson expects
+    final List<Map<String, dynamic>> photosList = [];
+    for (var url in photoUrls) {
+      photosList.add({'image_path': url});
+    }
+
+    return {
+      'id': id,
+      'user_id': userId,  // ← ADD THIS LINE
+      'title': title,
+      'description': description,
+      'price': price,
+      'location': location,
+      'city': city,
+      'shipping_type': shippingType,
+      'active': active,
+      'sold': sold,
+      'allow_offers': allowOffers,
+      'quantity_left': quantityLeft,
+      'approval_status': approvalStatus,
+      'category': categoryName != null ? {'name': categoryName, 'group': categoryGroup} : null,
+      'brand': brandName != null ? {'name': brandName} : null,
+      'condition': conditionTitle != null ? {'title': conditionTitle} : null,
+      'photos': photosList,
+      'size': size,
+      'user': user,
+    };
+  }
 }
+
+
+

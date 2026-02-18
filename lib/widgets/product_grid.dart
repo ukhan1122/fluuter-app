@@ -1,4 +1,5 @@
-// lib/widgets/product_grid.dart - UPDATED
+// lib/widgets/product_grid.dart - SIMPLIFIED (NO SEARCH)
+
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/api_service.dart';
@@ -32,52 +33,49 @@ class _ProductGridState extends State<ProductGrid> {
     _loadProducts();
   }
 
- void _loadProducts() {
-  print('🚀 Loading ${widget.section} products from CACHE...');
-  
-  String apiGroup = _mapSectionToGroup(widget.section);
-  
-  // USE CACHE INSTEAD OF DIRECT API CALLS
-  _productsFuture = ProductCache.getProducts().then((allProducts) {
-    if (apiGroup.isNotEmpty) {
-      // FILTER products by category group
-      final filtered = allProducts.where((product) {
-        final productGroup = product.categoryGroup?.toLowerCase() ?? '';
-        final targetGroup = apiGroup.toLowerCase();
+  void _loadProducts() {
+    print('🚀 Loading ${widget.section} products from CACHE...');
+    
+    String apiGroup = _mapSectionToGroup(widget.section);
+    
+    _productsFuture = ProductCache.getProducts().then((allProducts) {
+      if (apiGroup.isNotEmpty) {
+        final filtered = allProducts.where((product) {
+          final productGroup = product.categoryGroup?.toLowerCase() ?? '';
+          final targetGroup = apiGroup.toLowerCase();
+          
+          if (targetGroup == 'mens' && productGroup == 'men') return true;
+          if (targetGroup == 'womens' && productGroup == 'women') return true;
+          
+          return productGroup == targetGroup;
+        }).toList();
         
-        // Handle plural/singular variations
-        if (targetGroup == 'mens' && productGroup == 'men') return true;
-        if (targetGroup == 'womens' && productGroup == 'women') return true;
-        
-        return productGroup == targetGroup;
-      }).toList();
-      
-      print('✅ Found ${filtered.length} ${widget.section} products in cache');
-      return filtered;
-    } else {
-      return allProducts;
+        print('✅ Found ${filtered.length} ${widget.section} products');
+        return filtered;
+      } else {
+        return allProducts;
+      }
+    });
+    
+    if (mounted) {
+      setState(() {});
     }
-  });
-  
-  if (mounted) {
-    setState(() {});
   }
-}
 
-String _mapSectionToGroup(String section) {
-  switch (section.toLowerCase()) {
-    case 'men':
-      return 'mens';
-    case 'women':
-      return 'womens';
-    case 'kids':
-      return 'kids';  
-    case 'wedding':
-      return 'womens'; // ← CHANGE THIS to 'womens' instead of 'wedding'
-    default:
-      return '';
+  String _mapSectionToGroup(String section) {
+    switch (section.toLowerCase()) {
+      case 'men':
+        return 'mens';
+      case 'women':
+        return 'womens';
+      case 'kids':
+        return 'kids';  
+      case 'wedding':
+        return 'womens';
+      default:
+        return '';
+    }
   }
-}
 
   void _scrollProducts(int direction) {
     try {
@@ -135,10 +133,44 @@ String _mapSectionToGroup(String section) {
             : allProducts.take(6).toList();
         final showArrows = widget.isHorizontal && !_showAllProducts;
 
-        return _buildProductGrid(
-          productsToShow,
-          allProducts,
-          showArrows,
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      widget.customTitle ?? widget.section,
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
+                    if (showArrows)
+                      Row(
+                        children: [
+                          _buildArrowButton(-1, Icons.arrow_back_ios_rounded),
+                          _buildArrowButton(1, Icons.arrow_forward_ios_rounded),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 10),
+              
+              // Product grid
+              widget.isHorizontal && !_showAllProducts
+                  ? _buildHorizontalLayout(productsToShow)
+                  : _buildVerticalGrid(productsToShow),
+              
+              // View all button
+              if (allProducts.length > 6)
+                _buildViewAllButton(allProducts.length),
+            ],
+          ),
         );
       },
     );
@@ -150,14 +182,20 @@ String _mapSectionToGroup(String section) {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(false),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              widget.customTitle ?? widget.section,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ),
           const SizedBox(height: 20),
-          Center(
+          const Center(
             child: Column(
               children: [
                 CircularProgressIndicator(),
                 SizedBox(height: 10),
-                Text('Loading ${widget.section}...'),
+                Text('Loading products...'),
               ],
             ),
           ),
@@ -172,11 +210,17 @@ String _mapSectionToGroup(String section) {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(false),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              widget.customTitle ?? widget.section,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ),
           const SizedBox(height: 20),
           Container(
-            margin: EdgeInsets.symmetric(horizontal: 16),
-            padding: EdgeInsets.all(16),
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.red[50],
               borderRadius: BorderRadius.circular(8),
@@ -185,7 +229,7 @@ String _mapSectionToGroup(String section) {
             child: Column(
               children: [
                 Icon(Icons.error_outline, color: Colors.red, size: 40),
-                SizedBox(height: 10),
+                const SizedBox(height: 10),
                 Text(
                   'Failed to load ${widget.section}',
                   style: TextStyle(
@@ -193,16 +237,16 @@ String _mapSectionToGroup(String section) {
                     color: Colors.red[800],
                   ),
                 ),
-                SizedBox(height: 5),
+                const SizedBox(height: 5),
                 Text(
                   error.length > 100 ? '${error.substring(0, 100)}...' : error,
                   style: TextStyle(fontSize: 12, color: Colors.grey[700]),
                   textAlign: TextAlign.center,
                 ),
-                SizedBox(height: 10),
+                const SizedBox(height: 10),
                 ElevatedButton(
                   onPressed: _loadProducts,
-                  child: Text('Try Again'),
+                  child: const Text('Try Again'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                   ),
@@ -221,11 +265,17 @@ String _mapSectionToGroup(String section) {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(false),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              widget.customTitle ?? widget.section,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ),
           const SizedBox(height: 20),
           Container(
-            margin: EdgeInsets.symmetric(horizontal: 16),
-            padding: EdgeInsets.all(16),
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.grey[100],
               borderRadius: BorderRadius.circular(8),
@@ -233,7 +283,7 @@ String _mapSectionToGroup(String section) {
             child: Column(
               children: [
                 Icon(Icons.shopping_bag_outlined, color: Colors.grey, size: 40),
-                SizedBox(height: 10),
+                const SizedBox(height: 10),
                 Text(
                   'No ${widget.section} products',
                   style: TextStyle(
@@ -248,47 +298,6 @@ String _mapSectionToGroup(String section) {
       ),
     );
   }
-
-  Widget _buildProductGrid(
-    List<Product> productsToShow,
-    List<Product> allProducts,
-    bool showArrows,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildHeader(showArrows),
-          const SizedBox(height: 10),
-          widget.isHorizontal && !_showAllProducts
-              ? _buildHorizontalLayout(productsToShow)
-              : _buildVerticalGrid(productsToShow),
-          if (allProducts.length > 6) _buildViewAllButton(allProducts.length),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader(bool showArrows) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              widget.customTitle ?? widget.section,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            if (showArrows)
-              Row(
-                children: [
-                  _buildArrowButton(-1, Icons.arrow_back_ios_rounded),
-                  _buildArrowButton(1, Icons.arrow_forward_ios_rounded),
-                ],
-              ),
-          ],
-        ),
-      );
 
   Widget _buildArrowButton(int direction, IconData icon) => IconButton(
         onPressed: () => _scrollProducts(direction),
@@ -347,9 +356,7 @@ String _mapSectionToGroup(String section) {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: widget.isHorizontal && !_showAllProducts
-                  ? 150
-                  : double.infinity,
+              width: widget.isHorizontal && !_showAllProducts ? 150 : double.infinity,
               height: 150,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
@@ -393,45 +400,43 @@ String _mapSectionToGroup(String section) {
         ),
       );
 
-Widget _buildProductImage(Product product) {
-  if (product.photoUrls.isEmpty) {
-    return _buildPlaceholderImage();
-  }
-  
-  // Get the first photo URL directly (it's already a String)
-  String imageUrl = product.photoUrls.first;
-  
-  if (imageUrl.isNotEmpty) {
-    // Ensure URL has protocol
-    if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
-      imageUrl = 'https://$imageUrl';
+  Widget _buildProductImage(Product product) {
+    if (product.photoUrls.isEmpty) {
+      return _buildPlaceholderImage();
     }
     
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Image.network(
-        imageUrl,
-        fit: BoxFit.cover,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Center(
-            child: CircularProgressIndicator(
-              value: loadingProgress.expectedTotalBytes != null
-                  ? loadingProgress.cumulativeBytesLoaded / 
-                    loadingProgress.expectedTotalBytes!
-                  : null,
-            ),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
-          return _buildPlaceholderImage();
-        },
-      ),
-    );
-  } else {
-    return _buildPlaceholderImage();
+    String imageUrl = product.photoUrls.first;
+    
+    if (imageUrl.isNotEmpty) {
+      if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+        imageUrl = 'https://$imageUrl';
+      }
+      
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(
+          imageUrl,
+          fit: BoxFit.cover,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded / 
+                      loadingProgress.expectedTotalBytes!
+                    : null,
+              ),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) {
+            return _buildPlaceholderImage();
+          },
+        ),
+      );
+    } else {
+      return _buildPlaceholderImage();
+    }
   }
-}
 
   Widget _buildPlaceholderImage() {
     return Container(

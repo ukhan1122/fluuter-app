@@ -8,6 +8,8 @@ import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
 import '../screens/seller_profile_screen.dart'; // This also has a Product class
 import 'package:url_launcher/url_launcher.dart';  // ✅ ADD THIS IMPORT
+import '../services/api_service.dart';
+import '../providers/favorites_provider.dart'; 
 
 class ProductDetailScreen extends StatefulWidget {
   final String title, brand, price, category;
@@ -251,35 +253,61 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                   ),
                 
-                // Favorite Button
-                Positioned(
-                  top: 16,
-                  left: 16,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(25),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: IconButton(
-                      onPressed: () {
-                        setState(() => _isFavorite = !_isFavorite);
-                      }, 
-                      icon: Icon(
-                        _isFavorite ? Icons.favorite : Icons.favorite_border,
-                        color: _isFavorite ? Colors.red : Colors.grey[600],
-                        size: 24,
-                      ), 
-                      padding: const EdgeInsets.all(8),
-                    ),
-                  ),
+               // In the _ProductDetailScreenState class, replace the _isFavorite boolean with:
+
+// Remove this line:
+// bool _isFavorite = false;
+
+// Add this in the build method where the heart icon is:
+Positioned(
+  top: 16,
+  left: 16,
+  child: Container(
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(25),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.1),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    ),
+    child: Consumer<FavoritesProvider>(
+      builder: (context, favoritesProvider, child) {
+        final isFavorite = favoritesProvider.isFavorite(
+          widget.product.id.toString()
+        );
+        
+        return IconButton(
+          onPressed: () {
+            favoritesProvider.toggleFavorite(widget.product);
+            
+            // Show feedback
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  isFavorite 
+                      ? 'Removed from favorites' 
+                      : 'Added to favorites'
                 ),
+                duration: const Duration(seconds: 1),
+                backgroundColor: isFavorite ? Colors.grey : Colors.red,
+              ),
+            );
+          }, 
+          icon: Icon(
+            isFavorite ? Icons.favorite : Icons.favorite_border,
+            color: isFavorite ? Colors.red : Colors.grey[600],
+            size: 24,
+          ), 
+          padding: const EdgeInsets.all(8),
+        );
+      },
+    ),
+  ),
+),
               ],
             ),
           ),
@@ -754,245 +782,340 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
   
- Widget _buildSellerSection() {
-  final user = widget.product.user;
-  final firstName = user['first_name'] ?? '';
-  final lastName = user['last_name'] ?? '';
-  final username = user['username'] ?? '';
-  final profilePic = user['profile_picture'];
-  final isVerified = user['is_verified'] == 1;
+
+// Add this method to fetch complete seller data
+Future<Map<String, dynamic>> _fetchSellerData(String sellerId) async {
+  try {
+    print('📡 Fetching seller data for product detail: $sellerId');
+    final profileResult = await ApiService.getSellerProfile(sellerId);
+    
+    if (profileResult['success'] == true) {
+      final profileData = profileResult['data'];
+      
+      // Also fetch ratings to get the count
+      final ratingsResult = await ApiService.getSellerRatings(sellerId);
+      
+      double rating = 0.0;
+      int reviewCount = 0;
+      
+      if (ratingsResult['success'] == true) {
+        // Extract rating from nested data
+        if (ratingsResult['average'] != null && ratingsResult['average'] > 0) {
+          rating = ratingsResult['average'].toDouble();
+        } else if (ratingsResult['data'] != null) {
+          final data = ratingsResult['data'];
+          if (data is Map && data.containsKey('average')) {
+            rating = (data['average'] is num) ? data['average'].toDouble() : 0.0;
+          }
+        }
+        
+        // Get review count
+        if (ratingsResult['count'] != null && ratingsResult['count'] > 0) {
+          reviewCount = ratingsResult['count'];
+        } else if (ratingsResult['data'] != null) {
+          final data = ratingsResult['data'];
+          if (data is Map && data.containsKey('ratings') && data['ratings'] is List) {
+            reviewCount = (data['ratings'] as List).length;
+          }
+        }
+      }
+      
+      // Create enhanced user data with ratings
+      Map<String, dynamic> enhancedUser = Map<String, dynamic>.from(profileData);
+      enhancedUser['rating'] = rating;
+      enhancedUser['average_rating'] = rating;
+      enhancedUser['reviews_count'] = reviewCount;
+      
+      print('✅ Enhanced seller data: rating=$rating, reviews=$reviewCount');
+      return enhancedUser;
+    }
+  } catch (e) {
+    print('❌ Error fetching seller data: $e');
+  }
   
-  // Get contact information from user data
-  final String email = user['email'] ?? '';  // Get email from user data
-  final String phone = user['phone'] ?? user['phone_number'] ?? '';  // Get phone from user data
-  final String whatsapp = user['whatsapp'] ?? user['whatsapp_number'] ?? phone;  // Get WhatsApp number
+  return {};
+}
+
+Widget _buildSellerSection() {
+  final userId = widget.product.user['id']?.toString() ?? '0';
   
-  // Mock data for ratings (replace with real data from API)
-  final double rating = 4.8;
-  final int totalReviews = 127;
-  final int totalSales = 89;
-  final int memberSince = 2023;
-  
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text(
-        'Seller Information', 
-        style: TextStyle(
-          fontSize: 18, 
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      const SizedBox(height: 12),
-      Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey[200]!),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+  return FutureBuilder<Map<String, dynamic>>(
+    future: _fetchSellerData(userId),
+    builder: (context, snapshot) {
+      // Use enhanced data if available, otherwise fall back to product user data
+      final Map<String, dynamic> user = snapshot.hasData && snapshot.data!.isNotEmpty
+          ? snapshot.data!
+          : widget.product.user;
+      
+      // Rest of your existing _buildSellerSection code using 'user' instead of 'widget.product.user'
+      final firstName = user['first_name'] ?? '';
+      final lastName = user['last_name'] ?? '';
+      final username = user['username'] ?? '';
+      final profilePic = user['profile_picture'];
+      final isVerified = user['is_verified'] == 1;
+      
+      // Get contact information
+      final String email = user['email'] ?? '';
+      final String phone = user['phone'] ?? user['phone_number'] ?? '';
+      final String whatsapp = user['whatsapp'] ?? user['whatsapp_number'] ?? phone;
+      
+      // Extract rating and reviews - now from enhanced data
+      double rating = 0.0;
+      int totalReviews = 0;
+      
+      if (user['average_rating'] != null) {
+        rating = (user['average_rating'] is num) 
+            ? (user['average_rating'] as num).toDouble() 
+            : double.tryParse(user['average_rating'].toString()) ?? 0.0;
+      } else if (user['rating'] != null) {
+        rating = (user['rating'] is num) 
+            ? (user['rating'] as num).toDouble() 
+            : double.tryParse(user['rating'].toString()) ?? 0.0;
+      }
+      
+      if (user['reviews_count'] != null) {
+        totalReviews = (user['reviews_count'] is int) 
+            ? user['reviews_count'] 
+            : int.tryParse(user['reviews_count'].toString()) ?? 0;
+      }
+      
+      final int totalSales = user['products_count'] ?? user['total_products'] ?? 0;
+      
+      // Parse join date
+      String memberSince = 'Recently';
+      if (user['created_at'] != null) {
+        try {
+          final date = DateTime.parse(user['created_at']);
+          final now = DateTime.now();
+          final difference = now.difference(date);
+          
+          if (difference.inDays < 30) {
+            memberSince = '${difference.inDays} days ago';
+          } else if (difference.inDays < 365) {
+            memberSince = '${(difference.inDays / 30).floor()} months ago';
+          } else {
+            memberSince = '${(difference.inDays / 365).floor()} years ago';
+          }
+        } catch (e) {
+          memberSince = user['created_at']?.toString() ?? 'Recently';
+        }
+      }
+      
+      // Return your existing UI using these variables
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Seller Information', 
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
                 children: [
-                  // Seller Avatar with Verification Badge
-                  Stack(
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      CircleAvatar(
-                        radius: 28,
-                        backgroundImage: profilePic != null ? NetworkImage(profilePic.toString()) : null,
-                        backgroundColor: Colors.grey[200],
-                        child: profilePic == null 
-                            ? const Icon(Icons.person, size: 28, color: Colors.grey) 
-                            : null,
-                      ),
-                      if (isVerified)
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: Container(
-                            padding: const EdgeInsets.all(3),
-                            decoration: const BoxDecoration(
-                              color: Colors.green,
-                              shape: BoxShape.circle,
+                      // Seller Avatar with Verification Badge
+                      Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 28,
+                            backgroundImage: profilePic != null ? NetworkImage(profilePic.toString()) : null,
+                            backgroundColor: Colors.grey[200],
+                            child: profilePic == null 
+                                ? const Icon(Icons.person, size: 28, color: Colors.grey) 
+                                : null,
+                          ),
+                          if (isVerified)
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(3),
+                                decoration: const BoxDecoration(
+                                  color: Colors.green,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 12,
+                                ),
+                              ),
                             ),
-                            child: const Icon(
-                              Icons.check,
-                              color: Colors.white,
-                              size: 12,
+                        ],
+                      ),
+                      
+                      const SizedBox(width: 16),
+                      
+                      // Seller Name and Rating
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$firstName $lastName'.trim().isNotEmpty 
+                                  ? '$firstName $lastName'.trim() 
+                                  : username,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                ...List.generate(5, (index) {
+                                  if (index < rating.floor()) {
+                                    return const Icon(Icons.star, color: Colors.amber, size: 14);
+                                  } else if (index < rating) {
+                                    return const Icon(Icons.star_half, color: Colors.amber, size: 14);
+                                  } else {
+                                    return const Icon(Icons.star_border, color: Colors.amber, size: 14);
+                                  }
+                                }),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '($totalReviews)',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(Icons.shopping_bag_outlined, size: 12, color: Colors.grey[500]),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '$totalSales sales',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey[500]),
+                                const SizedBox(width: 4),
+                                Text(
+                                  memberSince,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      // Visit Shop Button
+                      Container(
+                        margin: const EdgeInsets.only(left: 8),
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => SellerProfileScreen(
+                                  sellerId: userId,
+                                ),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            minimumSize: const Size(80, 36),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'Visit Shop',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
+                      ),
                     ],
                   ),
                   
-                  const SizedBox(width: 16),
+                  const SizedBox(height: 16),
                   
-                  // Seller Name and Rating
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '$firstName $lastName'.trim().isNotEmpty 
-                              ? '$firstName $lastName'.trim() 
-                              : username,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            ...List.generate(5, (index) {
-                              if (index < rating.floor()) {
-                                return const Icon(Icons.star, color: Colors.amber, size: 14);
-                              } else if (index < rating) {
-                                return const Icon(Icons.star_half, color: Colors.amber, size: 14);
-                              } else {
-                                return const Icon(Icons.star_border, color: Colors.amber, size: 14);
-                              }
-                            }),
-                            const SizedBox(width: 6),
-                            Text(
-                              '($totalReviews)',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(Icons.shopping_bag_outlined, size: 12, color: Colors.grey[500]),
-                            const SizedBox(width: 4),
-                            Text(
-                              '$totalSales sales',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey[500]),
-                            const SizedBox(width: 4),
-                            Text(
-                              '$memberSince',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  
-                  // Visit Shop Button
-                  Container(
-                    margin: const EdgeInsets.only(left: 8),
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => SellerProfileScreen(
-                              sellerId: widget.product.user['id']?.toString() ?? '0',
-                            ),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        minimumSize: const Size(80, 36),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        'Visit Shop',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                  // Contact Buttons Row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildContactButton(
+                          icon: Icons.email_outlined,
+                          label: 'Email',
+                          color: Colors.blue,
+                          onTap: () {
+                            if (email.isNotEmpty) {
+                              _launchEmail(email);
+                            } else {
+                              _showNoContactInfo('Email');
+                            }
+                          },
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildContactButton(
+                          icon: FontAwesomeIcons.whatsapp,
+                          label: 'WhatsApp',
+                          color: const Color(0xFF25D366),
+                          onTap: () {
+                            if (whatsapp.isNotEmpty) {
+                              _launchWhatsApp(whatsapp);
+                            } else {
+                              _showNoContactInfo('WhatsApp');
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildContactButton(
+                          icon: Icons.phone_outlined,
+                          label: 'Call',
+                          color: Colors.green,
+                          onTap: () {
+                            if (phone.isNotEmpty) {
+                              _launchPhoneDialer(phone);
+                            } else {
+                              _showNoContactInfo('Phone');
+                            }
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-              
-              const SizedBox(height: 16),
-              
-              // Contact Buttons Row
-              Row(
-                children: [
-                  // Email Button
-                  Expanded(
-                    child: _buildContactButton(
-                      icon: Icons.email_outlined,
-                      label: 'Email',
-                      color: Colors.blue,
-                      onTap: () {
-                        if (email.isNotEmpty) {
-                          _launchEmail(email);
-                        } else {
-                          _showNoContactInfo('Email');
-                        }
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  
-                  // WhatsApp Button
-                  Expanded(
-                    child: _buildContactButton(
-                      icon: FontAwesomeIcons.whatsapp,
-                      label: 'WhatsApp',
-                      color: const Color(0xFF25D366),
-                      onTap: () {
-                        if (whatsapp.isNotEmpty) {
-                          _launchWhatsApp(whatsapp);
-                        } else {
-                          _showNoContactInfo('WhatsApp');
-                        }
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  
-                  // Phone Button
-                  Expanded(
-                    child: _buildContactButton(
-                      icon: Icons.phone_outlined,
-                      label: 'Call',
-                      color: Colors.green,
-                      onTap: () {
-                        if (phone.isNotEmpty) {
-                          _launchPhoneDialer(phone);
-                        } else {
-                          _showNoContactInfo('Phone');
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
-    ],
+        ],
+      );
+    },
   );
 }
   

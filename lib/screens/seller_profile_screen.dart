@@ -229,7 +229,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> with SingleTi
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_handleTabChange);
     _loadSellerData();
-    _loadSellerProducts();
+    _loadSellerProducts();  // ← This calls the method below
   }
 
   @override
@@ -247,162 +247,195 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> with SingleTi
     }
   }
 
-Future<void> _loadSellerData() async {
-  setState(() {
-    _isLoading = true;
-    _errorMessage = null;
-  });
-
-  try {
-    // Fetch seller profile
-    print('📡 Fetching seller profile for ID: ${widget.sellerId}');
-    final profileResult = await ApiService.getSellerProfile(widget.sellerId);
-    
-    print('📡 Profile Result: $profileResult');
-    
-    if (profileResult['success'] == true) {
-      final profileData = profileResult['data'];
-      print('📡 Profile Data: $profileData');
-      
-      // Fetch seller ratings
-      print('📡 Fetching ratings...');
-      final ratingsResult = await ApiService.getSellerRatings(widget.sellerId);
-      print('📡 Ratings Result: $ratingsResult');
-      
-      // Fetch seller shop info
-      print('📡 Fetching shop info...');
-      Map<String, dynamic> shopData = {};
-      try {
-        final shopResult = await ApiService.getSellerShop(widget.sellerId);
-        print('📡 Shop Result: $shopResult');
-        if (shopResult['success'] == true) {
-          final shopResultData = shopResult['data'];
-          if (shopResultData is Map) {
-            // If shop data is nested under 'shop' key
-            if (shopResultData.containsKey('shop')) {
-              shopData = shopResultData['shop'] is Map 
-                  ? Map<String, dynamic>.from(shopResultData['shop']) 
-                  : {};
-            } else {
-              shopData = Map<String, dynamic>.from(shopResultData);
-            }
-          }
-        }
-      } catch (e) {
-        print('⚠️ Shop info not available: $e');
-      }
-
-      // ✅ KEEP THIS ONE - REMOVE THE DUPLICATE ABOVE
-      final combinedData = {
-        ...profileData is Map ? Map<String, dynamic>.from(profileData) : {},
-        ...shopData,
-        'rating': ratingsResult['average'] ?? 0.0,
-        'reviews_count': ratingsResult['count'] ?? 0,
-      };
-      
-      print('📡 Combined Data: $combinedData');
-
-      setState(() {
-        _seller = Seller.fromJson(Map<String, dynamic>.from(combinedData));
-        _localFollowersCount = _seller?.followersCount ?? 0;
-        _isLoading = false;
-      });
-      
-      print('✅ Seller created: ${_seller?.name}');
-      print('✅ Followers: ${_seller?.followersCount}');
-      print('✅ Products: ${_seller?.productCount}');
-
-      // Initialize follow provider if available
-      try {
-        final followProvider = Provider.of<FollowProvider>(context, listen: false);
-        final isFollowing = await ApiService.checkIfFollowing(widget.sellerId);
-        followProvider.initializeSeller(
-          widget.sellerId,
-          _seller?.followersCount ?? 0,
-          isFollowing,
-        );
-      } catch (e) {
-        print('⚠️ FollowProvider not available, using local state');
-      }
-    } else {
-      setState(() {
-        _errorMessage = profileResult['error'] ?? 'Failed to load seller profile';
-        _isLoading = false;
-      });
-    }
-  } catch (e) {
-    print('❌ Error loading profile: $e');
+  // ============ ADD THIS MISSING METHOD ============
+  Future<void> _loadSellerProducts() async {
     setState(() {
-      _errorMessage = 'Error loading profile: $e';
-      _isLoading = false;
+      _isLoadingProducts = true;
     });
-  }
-}
 
- Future<void> _loadSellerProducts() async {
-  setState(() {
-    _isLoadingProducts = true;
-  });
-
-  try {
-    // First try to get products from the shop endpoint (which we know has them)
-    print('📦 Attempting to get products from shop endpoint...');
-    final shopResult = await ApiService.getSellerShop(widget.sellerId);
-    
-    if (shopResult['success'] == true && shopResult['data'] != null) {
-      final shopData = shopResult['data'];
-      List<product_model.Product> extractedProducts = [];
+    try {
+      // First try to get products from the shop endpoint (which we know has them)
+      print('📦 Attempting to get products from shop endpoint...');
+      final shopResult = await ApiService.getSellerShop(widget.sellerId);
       
-      // Extract products from the nested structure
-      if (shopData is Map) {
-        // Check if products are in shopData['products']['data']
-        if (shopData.containsKey('products')) {
-          final productsData = shopData['products'];
-          if (productsData is Map && productsData.containsKey('data')) {
-            final productsList = productsData['data'] as List;
-            print('📦 Found ${productsList.length} products in shop data');
-            
-            for (var productJson in productsList) {
-              try {
-                final product = product_model.Product.fromJson(productJson);
-                extractedProducts.add(product);
-              } catch (e) {
-                print('⚠️ Error parsing product: $e');
+      if (shopResult['success'] == true && shopResult['data'] != null) {
+        final shopData = shopResult['data'];
+        List<product_model.Product> extractedProducts = [];
+        
+        // Extract products from the nested structure
+        if (shopData is Map) {
+          // Check if products are in shopData['products']['data']
+          if (shopData.containsKey('products')) {
+            final productsData = shopData['products'];
+            if (productsData is Map && productsData.containsKey('data')) {
+              final productsList = productsData['data'] as List;
+              print('📦 Found ${productsList.length} products in shop data');
+              
+              for (var productJson in productsList) {
+                try {
+                  final product = product_model.Product.fromJson(productJson);
+                  extractedProducts.add(product);
+                } catch (e) {
+                  print('⚠️ Error parsing product: $e');
+                }
               }
             }
           }
         }
+        
+        if (extractedProducts.isNotEmpty) {
+          setState(() {
+            _products = extractedProducts;
+            _isLoadingProducts = false;
+          });
+          print('✅ Loaded ${extractedProducts.length} products from shop data');
+          return;
+        }
       }
       
-      if (extractedProducts.isNotEmpty) {
-        setState(() {
-          _products = extractedProducts;
-          _isLoadingProducts = false;
-        });
-        print('✅ Loaded ${extractedProducts.length} products from shop data');
-        return;
-      }
+      // Fallback to the regular seller products endpoint
+      print('📦 Falling back to seller products endpoint...');
+      final products = await ApiService.getSellerProducts(widget.sellerId);
+      
+      setState(() {
+        _products = products;
+        _isLoadingProducts = false;
+      });
+      
+      print('✅ Loaded ${products.length} products from seller endpoint');
+      
+    } catch (e) {
+      print('❌ Error loading seller products: $e');
+      setState(() {
+        _products = [];
+        _isLoadingProducts = false;
+      });
     }
-    
-    // Fallback to the regular seller products endpoint
-    print('📦 Falling back to seller products endpoint...');
-    final products = await ApiService.getSellerProducts(widget.sellerId);
-    
-    setState(() {
-      _products = products;
-      _isLoadingProducts = false;
-    });
-    
-    print('✅ Loaded ${products.length} products from seller endpoint');
-    
-  } catch (e) {
-    print('❌ Error loading seller products: $e');
-    setState(() {
-      _products = [];
-      _isLoadingProducts = false;
-    });
   }
-}
+
+  // ============ YOUR EXISTING _loadSellerData METHOD ============
+  Future<void> _loadSellerData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Fetch seller profile
+      print('📡 Fetching seller profile for ID: ${widget.sellerId}');
+      final profileResult = await ApiService.getSellerProfile(widget.sellerId);
+      
+      print('📡 Profile Result: $profileResult');
+      
+      if (profileResult['success'] == true) {
+        final profileData = profileResult['data'];
+        print('📡 Profile Data: $profileData');
+        
+        // Fetch seller ratings
+        print('📡 Fetching ratings...');
+        final ratingsResult = await ApiService.getSellerRatings(widget.sellerId);
+        print('📡 Ratings Result: $ratingsResult');
+        
+        // FIX: Extract rating from nested data if top-level average is 0
+        double actualRating = ratingsResult['average'] ?? 0.0;
+        int actualReviewCount = ratingsResult['count'] ?? 0;
+        
+        // Check if there's a nested average in the data
+        if (actualRating == 0.0 && ratingsResult['data'] != null) {
+          final data = ratingsResult['data'];
+          if (data is Map) {
+            if (data.containsKey('average') && data['average'] != null) {
+              actualRating = (data['average'] is num) ? data['average'].toDouble() : 0.0;
+            }
+            if (data.containsKey('ratings') && data['ratings'] is List) {
+              actualReviewCount = (data['ratings'] as List).length;
+            }
+          }
+        }
+        
+        // Fetch seller shop info
+        print('📡 Fetching shop info...');
+        Map<String, dynamic> shopData = {};
+        try {
+          final shopResult = await ApiService.getSellerShop(widget.sellerId);
+          print('📡 Shop Result: $shopResult');
+          if (shopResult['success'] == true) {
+            final shopResultData = shopResult['data'];
+            if (shopResultData is Map) {
+              if (shopResultData.containsKey('shop')) {
+                shopData = shopResultData['shop'] is Map 
+                    ? Map<String, dynamic>.from(shopResultData['shop']) 
+                    : {};
+              } else {
+                shopData = Map<String, dynamic>.from(shopResultData);
+              }
+            }
+          }
+        } catch (e) {
+          print('⚠️ Shop info not available: $e');
+        }
+
+        // CRITICAL FIX: Create cleaned profile data without the incorrect rating field
+        Map<String, dynamic> cleanedProfileData = {};
+        if (profileData is Map) {
+          cleanedProfileData = Map<String, dynamic>.from(profileData);
+          // Remove the rating field if it exists (it's 0.0 and incorrect)
+          cleanedProfileData.remove('rating');
+          print('🧹 Removed rating field from profile data');
+        }
+        
+        final combinedData = {
+          ...cleanedProfileData,
+          ...shopData,
+          // Now add the correct rating
+          'rating': profileData is Map && profileData.containsKey('average_rating') 
+              ? profileData['average_rating']  // Use average_rating from original
+              : actualRating,
+          'reviews_count': actualReviewCount,
+        };
+        
+        print('📡 Combined Data: $combinedData');
+
+        setState(() {
+          _seller = Seller.fromJson(Map<String, dynamic>.from(combinedData));
+          _localFollowersCount = _seller?.followersCount ?? 0;
+          _isLoading = false;
+        });
+        
+        print('✅ Seller created: ${_seller?.name}');
+        print('✅ Followers: ${_seller?.followersCount}');
+        print('✅ Products: ${_seller?.productCount}');
+        print('⭐ FINAL RATING: ${_seller?.rating}');
+        print('⭐ REVIEW COUNT: ${_seller?.reviewCount}');
+
+        // Initialize follow provider if available
+        try {
+          final followProvider = Provider.of<FollowProvider>(context, listen: false);
+          final isFollowing = await ApiService.checkIfFollowing(widget.sellerId);
+          followProvider.initializeSeller(
+            widget.sellerId,
+            _seller?.followersCount ?? 0,
+            isFollowing,
+          );
+        } catch (e) {
+          print('⚠️ FollowProvider not available, using local state');
+        }
+      } else {
+        setState(() {
+          _errorMessage = profileResult['error'] ?? 'Failed to load seller profile';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error loading profile: $e');
+      setState(() {
+        _errorMessage = 'Error loading profile: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  // ============ YOUR EXISTING _handleFollowToggle METHOD ============
   Future<void> _handleFollowToggle() async {
     // Try using provider first
     try {
@@ -468,8 +501,10 @@ Future<void> _loadSellerData() async {
     }
   }
 
+  // ============ REST OF YOUR METHODS (build, _buildStatColumn, etc.) ============
   @override
   Widget build(BuildContext context) {
+    // Your existing build method...
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(
@@ -566,39 +601,38 @@ Future<void> _loadSellerData() async {
                 Row(
                   children: [
                     // Avatar with verification badge
-                  // Avatar with verification badge
-Stack(
-  children: [
-    CircleAvatar(
-      radius: 40,
-      backgroundImage: NetworkImage(_seller!.avatarUrl),
-      onBackgroundImageError: (_, __) {
-        // Don't set state here, just let it show the fallback
-      },
-      backgroundColor: Colors.grey[200],
-      child: _seller!.avatarUrl.isEmpty || _seller!.avatarUrl == 'https://via.placeholder.com/150'
-          ? const Icon(Icons.person, size: 40, color: Colors.grey)
-          : null, // If image loads successfully, no child needed
-    ),
-    if (_seller!.isVerified)
-      Positioned(
-        bottom: 0,
-        right: 0,
-        child: Container(
-          padding: const EdgeInsets.all(3),
-          decoration: const BoxDecoration(
-            color: Colors.green,
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.check,
-            color: Colors.white,
-            size: 12,
-          ),
-        ),
-      ),
-  ],
-),
+                    Stack(
+                      children: [
+                        CircleAvatar(
+                          radius: 40,
+                          backgroundImage: NetworkImage(_seller!.avatarUrl),
+                          onBackgroundImageError: (_, __) {
+                            // Don't set state here, just let it show the fallback
+                          },
+                          backgroundColor: Colors.grey[200],
+                          child: _seller!.avatarUrl.isEmpty || _seller!.avatarUrl == 'https://via.placeholder.com/150'
+                              ? const Icon(Icons.person, size: 40, color: Colors.grey)
+                              : null, // If image loads successfully, no child needed
+                        ),
+                        if (_seller!.isVerified)
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: const BoxDecoration(
+                                color: Colors.green,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.check,
+                                color: Colors.white,
+                                size: 12,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                     const SizedBox(width: 16),
                     
                     // Follow Stats
@@ -652,48 +686,47 @@ Stack(
                           ),
                           const SizedBox(width: 8),
                           // Rating
-                       // Rating section - replace the existing Container with this:
-Container(
-  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-  decoration: BoxDecoration(
-    color: _seller!.rating > 0 ? Colors.amber.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
-    borderRadius: BorderRadius.circular(12),
-  ),
-  child: Row(
-    children: [
-      Icon(
-        _seller!.rating > 0 ? Icons.star : Icons.star_border,
-        color: _seller!.rating > 0 ? Colors.amber : Colors.grey,
-        size: 16,
-      ),
-      const SizedBox(width: 4),
-      if (_seller!.rating > 0) ...[
-        Text(
-          _seller!.rating.toStringAsFixed(1),
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        Text(
-          ' (${_seller!.reviewCount})',
-          style: TextStyle(
-            fontSize: 11,
-            color: Colors.grey[600],
-          ),
-        ),
-      ] else ...[
-        Text(
-          'No ratings yet',
-          style: TextStyle(
-            fontSize: 11,
-            color: Colors.grey[600],
-          ),
-        ),
-      ],
-    ],
-  ),
-),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _seller!.rating > 0 ? Colors.amber.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _seller!.rating > 0 ? Icons.star : Icons.star_border,
+                                  color: _seller!.rating > 0 ? Colors.amber : Colors.grey,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 4),
+                                if (_seller!.rating > 0) ...[
+                                  Text(
+                                    _seller!.rating.toStringAsFixed(1),
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    ' (${_seller!.reviewCount})',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ] else ...[
+                                  Text(
+                                    'No ratings yet',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -888,112 +921,110 @@ Container(
     );
   }
 
- Widget _buildProductCard(product_model.Product product) {
-  return GestureDetector(
-    onTap: () {
-      // Navigate to product details
-      Navigator.pop(context);
-    },
-    child: Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Container(
-        height: 240, // Fixed height to prevent overflow
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Product Image - Fixed height
-            Container(
-              height: 140,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(8),
-                ),
-                image: DecorationImage(
-                  image: NetworkImage(
-                    product.photoUrls.isNotEmpty 
-                        ? product.photoUrls.first 
-                        : 'https://via.placeholder.com/300x200',
+  Widget _buildProductCard(product_model.Product product) {
+    return GestureDetector(
+      onTap: () {
+        // Navigate to product details
+        Navigator.pop(context);
+      },
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Container(
+          height: 240,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 140,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(8),
                   ),
-                  fit: BoxFit.cover,
-                  onError: (exception, stackTrace) {},
+                  image: DecorationImage(
+                    image: NetworkImage(
+                      product.photoUrls.isNotEmpty 
+                          ? product.photoUrls.first 
+                          : 'https://via.placeholder.com/300x200',
+                    ),
+                    fit: BoxFit.cover,
+                    onError: (exception, stackTrace) {},
+                  ),
                 ),
+                child: product.photoUrls.isEmpty 
+                    ? Center(
+                        child: Icon(Icons.broken_image, color: Colors.grey[400]),
+                      )
+                    : null,
               ),
-              child: product.photoUrls.isEmpty 
-                  ? Center(
-                      child: Icon(Icons.broken_image, color: Colors.grey[400]),
-                    )
-                  : null,
-            ),
-            
-            // Product Info - Fixed height with padding
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      product.title,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+              
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        product.title,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      product.description,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey[600],
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Rs. ${product.price.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.red,
-                      ),
-                    ),
-                    if (product.conditionTitle != null) ...[
                       const SizedBox(height: 2),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(4),
+                      Text(
+                        product.description,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey[600],
                         ),
-                        child: Text(
-                          product.conditionTitle!,
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: Colors.green[800],
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Rs. ${product.price.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red,
                         ),
                       ),
+                      if (product.conditionTitle != null) ...[
+                        const SizedBox(height: 2),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            product.conditionTitle!,
+                            style: TextStyle(
+                              fontSize: 9,
+                              color: Colors.green[800],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildAboutSection() {
     return SingleChildScrollView(
@@ -1049,13 +1080,14 @@ Container(
                 if (_seller!.location != null)
                   _buildInfoRow(Icons.location_on, 'Location', _seller!.location!),
                 _buildInfoRow(Icons.calendar_today, 'Member Since', _seller!.joinedDate),
-           _buildInfoRow(
-  Icons.star, 
-  'Rating', 
-  _seller!.rating > 0 
-      ? '${_seller!.rating.toStringAsFixed(1)} (${_seller!.reviewCount} reviews)'
-      : 'No ratings yet',
-),    _buildInfoRow(Icons.inventory, 'Total Products', _seller!.productCount.toString()),
+                _buildInfoRow(
+                  Icons.star, 
+                  'Rating', 
+                  _seller!.rating > 0 
+                      ? '${_seller!.rating.toStringAsFixed(1)} (${_seller!.reviewCount} reviews)'
+                      : 'No ratings yet',
+                ),
+                _buildInfoRow(Icons.inventory, 'Total Products', _seller!.productCount.toString()),
                 _buildInfoRow(Icons.people, 'Total Followers', _getFollowersCount().toString()),
                 _buildInfoRow(Icons.person_add, 'Following', _seller!.followingCount.toString()),
                 if (_seller!.isVerified)

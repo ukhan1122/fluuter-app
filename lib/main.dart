@@ -9,12 +9,31 @@ import 'services/api_service.dart';
 import 'screens/profile_screen.dart';
 import 'screens/seller_profile_screen.dart';
 import 'providers/follow_provider.dart';  // ✅ MAKE SURE THIS IMPORT EXISTS
+import 'services/search_service.dart'; // ✅ ADD THIS IMPORT
+import 'providers/favorites_provider.dart'; // Add this import
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   
+    _initializeSearch();
   // Just run the app immediately
   runApp(const MyApp());
+}
+Future<void> _initializeSearch() async {
+  print('🔍 Initializing search service from main...');
+  try {
+    final products = await ProductCache.getProducts(limit: 50);
+    print('📦 Loaded ${products.length} products for search');
+    
+    if (products.isNotEmpty) {
+      SearchService.initialize(products);
+      print('✅ Search service initialized with ${products.length} products');
+    } else {
+      print('⚠️ No products loaded for search');
+    }
+  } catch (e) {
+    print('❌ Failed to initialize search: $e');
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -26,7 +45,8 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => UserProvider()),
         ChangeNotifierProvider(create: (_) => CartProvider()), 
-        ChangeNotifierProvider(create: (_) => FollowProvider()), // ✅ ADD THIS LINE
+        ChangeNotifierProvider(create: (_) => FollowProvider()),
+    ChangeNotifierProvider(create: (_) => FavoritesProvider()), // Add this
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
