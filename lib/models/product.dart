@@ -1,7 +1,7 @@
 // lib/models/product.dart
 class Product {
   final int id;
-  final int userId;  // ← This is correct - field declaration
+  final int userId;  // ← This is the seller ID - use this!
   final String title;
   final String description;
   final double price;
@@ -23,7 +23,7 @@ class Product {
 
   Product({
     required this.id,
-    required this.userId,  // ← ADD THIS
+    required this.userId,  // ← This is the seller ID
     required this.title,
     required this.description,
     required this.price,
@@ -45,8 +45,7 @@ class Product {
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
-
-      final List<String> extractedPhotoUrls = [];
+    final List<String> extractedPhotoUrls = [];
     
     if (json['photos'] != null && json['photos'] is List) {
       final photosList = json['photos'] as List;
@@ -64,9 +63,10 @@ class Product {
         }
       }
     }
+    
     return Product(
       id: json['id'] ?? 0,
-      userId: json['user_id'] ?? 0,  // ← ADD THIS LINE
+      userId: json['user_id'] ?? 0,  // ← This is the seller ID
       title: json['title'] ?? '',
       description: json['description'] ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
@@ -82,13 +82,13 @@ class Product {
       categoryGroup: json['category']?['group'],
       brandName: json['brand']?['name'],
       conditionTitle: json['condition']?['title'],
-      photoUrls: extractedPhotoUrls, // Use the extracted URLs here
+      photoUrls: extractedPhotoUrls,
       size: json['size'],
       user: json['user'] ?? {},
     );
   }
 
-Map<String, dynamic> toJson() {
+  Map<String, dynamic> toJson() {
     // Reconstruct the photos array in the same format as fromJson expects
     final List<Map<String, dynamic>> photosList = [];
     for (var url in photoUrls) {
@@ -97,7 +97,7 @@ Map<String, dynamic> toJson() {
 
     return {
       'id': id,
-      'user_id': userId,  // ← ADD THIS LINE
+      'user_id': userId,  // ← This is the seller ID
       'title': title,
       'description': description,
       'price': price,
@@ -118,6 +118,3 @@ Map<String, dynamic> toJson() {
     };
   }
 }
-
-
-

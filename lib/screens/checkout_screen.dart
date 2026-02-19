@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
+import '../services/order_service.dart';
+import '../models/order.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final List<CartItem> cartItems;
@@ -41,7 +43,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (_formKey.currentState!.validate()) {
       showDialog(
         context: context,
-        builder: (context) => AlertDialog(
+        builder: (dialogContext) => AlertDialog(
+
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           title: const Row(
             children: [
@@ -83,34 +86,129 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+             onPressed: () => Navigator.pop(dialogContext),
+
               child: const Text('Review', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
-              onPressed: () {
-                // Clear the cart
-                final cartProvider = Provider.of<CartProvider>(context, listen: false);
-                cartProvider.clearCart();
+             onPressed: () async {
+
+  Navigator.pop(dialogContext); // ✅ close confirm dialog safely
+
+  if (!mounted) return;
+
                 
-                Navigator.pop(context); // Close confirm dialog
+             // 🔥 Close keyboard first
+FocusScope.of(context).unfocus();
+
+// Small delay to let keyboard close smoothly
+await Future.delayed(const Duration(milliseconds: 200));
+
+// Show loading dialog
+BuildContext? loadingDialogContext;
+
+
+if (mounted) {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) {
+      loadingDialogContext = ctx;   // ✅ store dialog context
+      return const AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Processing your order...'),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+           
                 
-                // Show success message
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Row(
-                      children: [
-                        const Icon(Icons.check_circle, color: Colors.white),
-                        const SizedBox(width: 8),
-                        const Text('Order confirmed successfully!'),
-                      ],
-                    ),
-                    backgroundColor: Colors.green,
-                    duration: const Duration(seconds: 3),
-                  ),
+                // Prepare order items
+                final orderItems = widget.cartItems.map((item) {
+                  double itemPrice = 0;
+                  try {
+                    String priceStr = item.price.replaceAll('Rs.', '').replaceAll(',', '').trim();
+                    itemPrice = double.parse(priceStr);
+                  } catch (e) {
+                    print('Error parsing price: ${item.price}');
+                  }
+                  
+                  print('📦 Item: ${item.title}, ProductID: ${item.productId}, SellerID: ${item.sellerId}');
+                  
+                  return {
+                    'product_id': item.productId,
+                    'product_title': item.title,
+                    'product_image': item.image,
+                    'price': itemPrice,
+                    'quantity': item.quantity,
+                    'total': itemPrice * item.quantity,
+                    'seller_id': item.sellerId,
+                  };
+                }).toList();
+                
+                // Call API to create order
+                final result = await OrderService.createOrder(
+                  customerName: _nameController.text,
+                  phone: _phoneController.text,
+                  email: _emailController.text,
+                  address: _addressController.text,
+                  city: _cityController.text,
+                  subtotal: _subtotal,
+                  deliveryCharge: _deliveryCharge,
+                  total: _total,
+                  paymentMethod: _paymentMethod,
+                  deliveryOption: _deliveryOption,
+                  items: orderItems,
                 );
                 
-                // Navigate back to home screen
-                Navigator.popUntil(context, (route) => route.isFirst);
+                 if (mounted && loadingDialogContext != null) {
+  Navigator.of(loadingDialogContext!).pop();  // ✅ closes ONLY loading dialog
+}
+
+
+                
+                // Small delay to ensure dialog is closed
+                await Future.delayed(const Duration(milliseconds: 100));
+                
+                // Show result using post frame callback
+                if (mounted) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) return;
+                    
+                    if (result['success'] == true) {
+                      // Clear the cart
+                      final cartProvider = Provider.of<CartProvider>(context, listen: false);
+                      cartProvider.clearCart();
+                      
+                      // Show success dialog
+                      _showOrderSuccessDialog(result['order_number']);
+                    } else {
+                      // Show error message
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Row(
+                            children: [
+                              const Icon(Icons.error, color: Colors.white),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text('Order failed: ${result['message'] ?? 'Please try again'}'),
+                              ),
+                            ],
+                          ),
+                          backgroundColor: Colors.red,
+                          duration: const Duration(seconds: 5),
+                        ),
+                      );
+                    }
+                  });
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.redAccent,
@@ -122,6 +220,71 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ),
       );
     }
+  }
+
+  void _showOrderSuccessDialog(String orderNumber) {
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 28),
+            SizedBox(width: 8),
+            Text('Order Confirmed!', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.receipt_long, size: 60, color: Colors.green),
+            const SizedBox(height: 16),
+            Text(
+              'Order #$orderNumber',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Your order has been placed successfully!',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  _buildConfirmDetail('Total', 'Rs.${_total.toStringAsFixed(0)}'),
+                  _buildConfirmDetail('Payment', _paymentMethod),
+                  _buildConfirmDetail('Delivery', _deliveryOption),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              if (mounted) {
+                Navigator.popUntil(context, (route) => route.isFirst);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Continue Shopping'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildConfirmDetail(String label, String value) {
