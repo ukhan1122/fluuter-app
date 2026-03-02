@@ -9,7 +9,11 @@ import '../providers/cart_provider.dart';
 import '../screens/seller_profile_screen.dart'; // This also has a Product class
 import 'package:url_launcher/url_launcher.dart';  // ✅ ADD THIS IMPORT
 import '../services/api_service.dart';
-import '../providers/favorites_provider.dart'; 
+import '../providers/favorites_provider.dart';
+import 'dart:async'; // For TimeoutException
+import 'dart:convert'; // For jsonEncode
+import 'package:http/http.dart' as http;
+import '../services/auth_service.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final String title, brand, price, category;
@@ -1058,57 +1062,64 @@ Widget _buildSellerSection() {
                     ],
                   ),
                   
-                  const SizedBox(height: 16),
-                  
-                  // Contact Buttons Row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildContactButton(
-                          icon: Icons.email_outlined,
-                          label: 'Email',
-                          color: Colors.blue,
-                          onTap: () {
-                            if (email.isNotEmpty) {
-                              _launchEmail(email);
-                            } else {
-                              _showNoContactInfo('Email');
-                            }
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildContactButton(
-                          icon: FontAwesomeIcons.whatsapp,
-                          label: 'WhatsApp',
-                          color: const Color(0xFF25D366),
-                          onTap: () {
-                            if (whatsapp.isNotEmpty) {
-                              _launchWhatsApp(whatsapp);
-                            } else {
-                              _showNoContactInfo('WhatsApp');
-                            }
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildContactButton(
-                          icon: Icons.phone_outlined,
-                          label: 'Call',
-                          color: Colors.green,
-                          onTap: () {
-                            if (phone.isNotEmpty) {
-                              _launchPhoneDialer(phone);
-                            } else {
-                              _showNoContactInfo('Phone');
-                            }
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
+     // Contact Buttons Row - WhatsApp and Make Offer (IMPROVED UI)
+const SizedBox(height: 8),
+Row(
+  children: [
+    // WhatsApp Button (improved padding)
+    Expanded(
+      child: Container(
+        height: 44, // Fixed height for consistency
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF25D366).withOpacity(0.3)),
+        ),
+        child: _buildContactButton(
+          icon: FontAwesomeIcons.whatsapp,
+          label: 'WhatsApp',
+          color: const Color(0xFF25D366),
+          onTap: () {
+            if (whatsapp.isNotEmpty) {
+              _launchWhatsApp(whatsapp);
+            } else {
+              _showNoContactInfo('WhatsApp');
+            }
+          },
+        ),
+      ),
+    ),
+    const SizedBox(width: 12),
+    // Make Offer Button (improved)
+    Expanded(
+      flex: 2,
+      child: SizedBox(
+        height: 44, // Same height as WhatsApp button
+        child: ElevatedButton.icon(
+          onPressed: () {
+            _checkAuthAndMakeOffer();
+          },
+          icon: const Icon(Icons.local_offer_outlined, size: 18),
+          label: const Text(
+            'Make Offer',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            elevation: 0,
+          ),
+        ),
+      ),
+    ),
+  ],
+),
+const SizedBox(height: 8),
                 ],
               ),
             ),
@@ -1210,38 +1221,575 @@ void _showNoContactInfo(String contactType) {
 
 
   Widget _buildContactButton({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+  required IconData icon,
+  required String label,
+  required Color color,
+  required VoidCallback onTap,
+}) {
+  return InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(8),
+    child: Container(
+      width: double.infinity,
+      height: 44, // Fixed height
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+  Future<void> _checkAuthAndMakeOffer() async {
+  final authService = AuthService();
+  final isLoggedIn = await authService.isLoggedIn();
+  
+  if (!isLoggedIn) {
+    // Show login required dialog
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Login Required'),
+        content: const Text('Please login to make an offer on this product.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Navigate to login screen - adjust this based on your app
+              // Navigator.push(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Login'),
+          ),
+        ],
+      ),
+    );
+    return;
+  }
+  
+  // User is logged in, show offer dialog
+  _showMakeOfferDialog();
+}
+
+Future<void> _showMakeOfferDialog() async {
+  final TextEditingController offerController = TextEditingController();
+  bool isLoading = false;
+  
+  // Parse the original price (remove 'Rs.' and commas)
+  String originalPriceStr = widget.price.replaceAll('Rs.', '').replaceAll(',', '').trim();
+  double originalPrice = double.tryParse(originalPriceStr) ?? 0.0;
+  
+  return showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header with close button
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Make an Offer',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Product info card
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            width: 60,
+                            height: 60,
+                            color: Colors.grey[200],
+                            child: _imageUrls.isNotEmpty
+                                ? Image.network(
+                                    _imageUrls.first,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return const Icon(Icons.image, color: Colors.grey);
+                                    },
+                                  )
+                                : const Icon(Icons.image, color: Colors.grey),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.title,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Text(
+                                    'Price:',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    widget.price,
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.red,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 20),
+                  
+                  // Offer input label
+                  const Text(
+                    'Your Offer Price',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 8),
+                  
+                  // Offer input with better styling
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(12),
+                              bottomLeft: Radius.circular(12),
+                            ),
+                            border: Border(
+                              right: BorderSide(color: Colors.grey[300]!),
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'Rs.',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey[700],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: TextField(
+                            controller: offerController,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              hintText: 'Enter amount',
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                            ),
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Suggested offers - improved design
+                  if (originalPrice > 0) ...[
+                    const Text(
+                      'Suggested offers',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildSuggestionChip(
+                            '20% off',
+                            (originalPrice * 0.8).toStringAsFixed(0),
+                            offerController,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildSuggestionChip(
+                            '30% off',
+                            (originalPrice * 0.7).toStringAsFixed(0),
+                            offerController,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildSuggestionChip(
+                            '40% off',
+                            (originalPrice * 0.6).toStringAsFixed(0),
+                            offerController,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Loading indicator
+                  if (isLoading)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 16),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                  
+                  // Action buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: isLoading ? null : () => Navigator.pop(context),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              side: BorderSide(color: Colors.grey[300]!),
+                            ),
+                          ),
+                          child: Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: Colors.grey[700],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: isLoading
+                              ? null
+                              : () async {
+                                  final offerPrice = offerController.text.trim();
+                                  if (offerPrice.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Please enter an offer price'),
+                                        backgroundColor: Colors.orange,
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  
+                                  if (double.tryParse(offerPrice) == null) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Please enter a valid number'),
+                                        backgroundColor: Colors.orange,
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  
+                                  setState(() => isLoading = true);
+                                  
+                                  final result = await _makeOffer(
+                                    productId: widget.product.id.toString(),
+                                    offerPrice: offerPrice,
+                                  );
+                                  
+                                  setState(() => isLoading = false);
+                                  
+                                  if (result['success'] == true) {
+                                    Navigator.pop(context);
+                                    _showOfferSuccessDialog(result['message'] ?? 'Offer sent successfully!');
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(result['error'] ?? 'Failed to send offer'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'Send Offer',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+Widget _buildSuggestionChip(String label, String value, TextEditingController controller) {
+  return GestureDetector(
+    onTap: () {
+      controller.text = value;
+    },
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.red[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.red[100]!),
+      ),
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.red[700],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          Text(
+            'Rs. $value',
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.red[700],
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+void _showOfferSuccessDialog(String message) {
+  showDialog(
+    context: context,
+    builder: (context) => Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withOpacity(0.3)),
-        ),
+        padding: const EdgeInsets.all(24),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: 16),
-            const SizedBox(height: 4),
-            Text(
-              label,
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                color: Colors.green,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.check,
+                color: Colors.white,
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Offer Sent!',
               style: TextStyle(
-                fontSize: 11,
-                color: color,
-                fontWeight: FontWeight.w600,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'The seller will respond to your offer soon.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey[500],
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text('OK'),
               ),
             ),
           ],
         ),
       ),
-    );
+    ),
+  );
+}
+
+Future<Map<String, dynamic>> _makeOffer({
+  required String productId,
+  required String offerPrice,
+}) async {
+  print('💰 Making offer on product $productId: Rs.$offerPrice');
+  
+  try {
+    // Get auth token
+    final authService = AuthService();
+    await authService.isLoggedIn();
+    final token = authService.token;
+    
+    if (token == null) {
+      return {
+        'success': false,
+        'error': 'You need to be logged in to make an offer',
+      };
+    }
+    
+    // API endpoint from your routes
+    final url = Uri.parse('${ApiService.baseUrl}/api/v1/listing/products/offers/create');
+    
+    final response = await http.post(
+      url,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+        'ngrok-skip-browser-warning': 'true',
+        'Host': 'depop-backend.test',
+      },
+      body: jsonEncode({
+        'product_id': productId,
+        'offer_price': offerPrice,
+        'message': 'Interested in this product',
+      }),
+    ).timeout(const Duration(seconds: 15));
+    
+    print('📡 Offer Response Status: ${response.statusCode}');
+    print('📡 Offer Response Body: ${response.body}');
+    
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final Map<String, dynamic> responseData = json.decode(response.body);
+      return {
+        'success': true,
+        'data': responseData['data'] ?? responseData,
+        'message': responseData['message'] ?? 'Offer sent successfully',
+      };
+    } else {
+      final Map<String, dynamic> errorData = json.decode(response.body);
+      return {
+        'success': false,
+        'error': errorData['message'] ?? errorData['error'] ?? 'Failed to send offer',
+      };
+    }
+  } on TimeoutException {
+    return {'success': false, 'error': 'Connection timeout'};
+  } catch (e) {
+    print('❌ Error making offer: $e');
+    return {'success': false, 'error': e.toString()};
   }
+}
 
  Widget _buildActionButtons() {
   final bool isOutOfStock = widget.product.sold || widget.product.quantityLeft <= 0;

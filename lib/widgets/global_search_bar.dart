@@ -11,6 +11,8 @@ import '../screens/profile_screen.dart';
 import '../screens/cart_screen.dart';
 import '../providers/cart_provider.dart';
 import '../screens/favorites_screen.dart'; // Add this import
+import '../providers/favorites_provider.dart';
+import '../screens/home_screen.dart';
 
 class GlobalSearchBar extends StatefulWidget implements PreferredSizeWidget {
   const GlobalSearchBar({super.key});
@@ -76,206 +78,244 @@ class _GlobalSearchBarState extends State<GlobalSearchBar> {
     return AppBar(
       backgroundColor: Colors.white,
       elevation: 0,
-      title: _showSearch
-          ? Container(
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: TextField(
-                controller: _searchController,
-                autofocus: true,
-                decoration: InputDecoration(
-                  hintText: 'Search products...',
-                  prefixIcon: const Icon(Icons.search, size: 20, color: Colors.grey),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.close, size: 20, color: Colors.grey),
-                    onPressed: () {
-                      setState(() {
-                        _showSearch = false;
-                        _searchController.clear();
-                      });
-                    },
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                ),
-                onSubmitted: (query) {
-                  if (query.trim().isNotEmpty) {
-                    final results = SearchService.search(query);
-                    
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => SearchResultsScreen(
-                          query: query,
-                          results: results,
-                        ),
-                      ),
-                    );
-                    
-                    setState(() {
-                      _showSearch = false;
-                      _searchController.clear();
-                    });
-                  }
-                },
-              ),
-            )
-          : GestureDetector(
-              onTap: () {
+     title: _showSearch
+    ? Container(
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: TextField(
+          controller: _searchController,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'Search products...',
+            prefixIcon: const Icon(Icons.search, size: 20, color: Colors.grey),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.close, size: 20, color: Colors.grey),
+              onPressed: () {
                 setState(() {
-                  _showSearch = true;
+                  _showSearch = false;
+                  _searchController.clear();
                 });
               },
-              child: Text(
-                'Closyyyy', // Keep your brand text
-                style: TextStyle(
-                  color: Colors.red[600],
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
-              ),
             ),
-      actions: [
-        // Search icon (shows when search is closed)
-        if (!_showSearch)
-          IconButton(
-            icon: const Icon(Icons.search, color: Colors.black87),
-            onPressed: () {
-              setState(() {
-                _showSearch = true;
-              });
-            },
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(vertical: 10),
           ),
-        
-      IconButton(
-  icon: const Icon(Icons.favorite_border, color: Colors.black87),
-  onPressed: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const FavoritesScreen()),
-    );
-  },
-),
-        
-        // CART WITH BADGE (from CustomNavbar)
-        Consumer<CartProvider>(
-          builder: (context, cartProvider, child) {
-            final itemCount = cartProvider.totalQuantity;
-            return Stack(
-              children: [
-                IconButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const CartScreen()),
+          onSubmitted: (query) {
+            if (query.trim().isNotEmpty) {
+              final results = SearchService.search(query);
+              
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => SearchResultsScreen(
+                    query: query,
+                    results: results,
                   ),
-                  icon: const Icon(Icons.shopping_cart_outlined, color: Colors.black87), // or use FaIcon if you prefer
                 ),
-                if (itemCount > 0)
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 16,
-                        minHeight: 16,
-                      ),
-                      child: Text(
-                        itemCount > 99 ? '99+' : itemCount.toString(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-              ],
-            );
+              );
+              
+              setState(() {
+                _showSearch = false;
+                _searchController.clear();
+              });
+            }
           },
         ),
-        
-        // PROFILE/LOGIN SECTION (from CustomNavbar)
-        if (_isLoggedIn && _profilePicture != null && _profilePicture!.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: GestureDetector(
-              onTap: () => Navigator.push(
+      )
+    : GestureDetector(
+        onTap: () {
+          // Navigate to Home when Closyyyy is tapped
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => HomeScreen()),
+            (route) => false,
+          );
+        },
+        child: Text(
+          'Closyyyy', // Your brand text
+          style: TextStyle(
+            color: Colors.red[600],
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
+      ),
+   actions: [
+  // Search icon (shows when search is closed)
+  if (!_showSearch)
+    IconButton(
+      icon: const Icon(Icons.search, color: Colors.black87),
+      onPressed: () {
+        setState(() {
+          _showSearch = true;
+        });
+      },
+    ),
+  
+  // FAVORITES ICON WITH COUNT (UPDATED)
+  Consumer<FavoritesProvider>(
+    builder: (context, favoritesProvider, child) {
+      final favoriteCount = favoritesProvider.favoriteItems.length;
+      return Stack(
+        clipBehavior: Clip.none,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.favorite_border, color: Colors.black87),
+            onPressed: () {
+              Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const ProfileScreen()),
-              ).then((_) {
-                _loadUserData();
-              }),
-              child: CircleAvatar(
-                radius: 18,
-                backgroundImage: NetworkImage(_profilePicture!),
-                backgroundColor: Colors.grey[200],
-                child: _userName != null && _userName!.isNotEmpty
-                    ? null
-                    : const Icon(Icons.person, size: 18, color: Colors.grey),
-              ),
-            ),
-          )
-        else if (_isLoggedIn)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ProfileScreen()),
-              ).then((_) {
-                _loadUserData();
-              }),
-              child: CircleAvatar(
-                radius: 18,
-                backgroundColor: Colors.red,
-                child: _userName != null && _userName!.isNotEmpty && _userName!.length >= 1
-                    ? Text(
-                        _userName![0].toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      )
-                    : const Icon(Icons.person, size: 18, color: Colors.white),
-              ),
-            ),
-          )
-        else
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: TextButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const LoginScreen()),
-              ).then((_) {
-                _loadUserData();
-              }),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                minimumSize: Size.zero,
-              ),
-              child: const Text(
-                'Login', 
-                style: TextStyle(
+                MaterialPageRoute(builder: (context) => const FavoritesScreen()),
+              );
+            },
+          ),
+          if (favoriteCount > 0)
+            Positioned(
+              right: 4,
+              top: 4,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(
                   color: Colors.red,
-                  fontSize: 14,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 16,
+                  minHeight: 16,
+                ),
+                child: Text(
+                  favoriteCount > 99 ? '99+' : favoriteCount.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
               ),
             ),
+        ],
+      );
+    },
+  ),
+  
+  // CART WITH BADGE (keep as is)
+  Consumer<CartProvider>(
+    builder: (context, cartProvider, child) {
+      final itemCount = cartProvider.totalQuantity;
+      return Stack(
+        children: [
+          IconButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const CartScreen()),
+            ),
+            icon: const Icon(Icons.shopping_cart_outlined, color: Colors.black87),
           ),
-        
-        const SizedBox(width: 4), // Small spacing at the end
-      ],
+          if (itemCount > 0)
+            Positioned(
+              right: 8,
+              top: 8,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 16,
+                  minHeight: 16,
+                ),
+                child: Text(
+                  itemCount > 99 ? '99+' : itemCount.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
+      );
+    },
+  ),
+  
+
+  
+  // PROFILE/LOGIN SECTION (keep as is)
+  if (_isLoggedIn && _profilePicture != null && _profilePicture!.isNotEmpty)
+    Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      child: GestureDetector(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const ProfileScreen()),
+        ).then((_) {
+          _loadUserData();
+        }),
+        child: CircleAvatar(
+          radius: 18,
+          backgroundImage: NetworkImage(_profilePicture!),
+          backgroundColor: Colors.grey[200],
+        ),
+      ),
+    )
+  else if (_isLoggedIn)
+    Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      child: GestureDetector(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const ProfileScreen()),
+        ).then((_) {
+          _loadUserData();
+        }),
+        child: CircleAvatar(
+          radius: 18,
+          backgroundColor: Colors.red,
+          child: _userName != null && _userName!.isNotEmpty
+              ? Text(
+                  _userName![0].toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                )
+              : const Icon(Icons.person, size: 18, color: Colors.white),
+        ),
+      ),
+    )
+  else
+    Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      child: TextButton(
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        ).then((_) {
+          _loadUserData();
+        }),
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          minimumSize: Size.zero,
+        ),
+        child: const Text(
+          'Login', 
+          style: TextStyle(
+            color: Colors.red,
+            fontSize: 14,
+          ),
+        ),
+      ),
+    ),
+  
+  const SizedBox(width: 4),
+],
     );
   }
 }
