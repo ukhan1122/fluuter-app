@@ -3,18 +3,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/order.dart';
 import '../services/auth_service.dart';
+import '../config.dart';
 
 class OrderService {
-  static const String baseUrl = 'http://10.0.2.2:80';
+  static String get baseUrl => AppConfig.baseUrl;
 
-  static Map<String, String> get _headers {
-    return {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-      'Host': 'depop-backend.test',
-    };
-  }
+ static Map<String, String> _getHeaders(String? token) => AppConfig.getHeaders(token: token);
 
   static String _generateOrderNumber() {
     final now = DateTime.now();
@@ -34,13 +28,7 @@ class OrderService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/v1/user/cart/items'), // This endpoint works!
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-          'ngrok-skip-browser-warning': 'true',
-          'Host': 'depop-backend.test',
-        },
+     headers: _getHeaders(token),
         body: json.encode({
           'product_id': productId,
           'quantity': quantity,
@@ -68,12 +56,7 @@ static Future<int?> getUserAddressId(String token) async {
     // First, get current user info to know the user ID
     final userResponse = await http.get(
       Uri.parse('$baseUrl/api/v1/auth/user'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-        'ngrok-skip-browser-warning': 'true',
-        'Host': 'depop-backend.test',
-      },
+    headers: _getHeaders(token),
     ).timeout(const Duration(seconds: 10));
     
     if (userResponse.statusCode != 200) {
@@ -90,12 +73,7 @@ static Future<int?> getUserAddressId(String token) async {
     // Now get addresses
     final response = await http.get(
       Uri.parse('$baseUrl/api/v1/user/address'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-        'ngrok-skip-browser-warning': 'true',
-        'Host': 'depop-backend.test',
-      },
+  headers: _getHeaders(token),
     ).timeout(const Duration(seconds: 10));
     
     if (response.statusCode == 200) {
@@ -142,13 +120,7 @@ static Future<int?> getUserAddressId(String token) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/v1/user/address'),
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-          'ngrok-skip-browser-warning': 'true',
-          'Host': 'depop-backend.test',
-        },
+      headers: _getHeaders(token),
         body: json.encode({
           'address_line_1': address,
           'city': city,
@@ -278,13 +250,7 @@ static Future<int?> getUserAddressId(String token) async {
 
       final response = await http.post(
         Uri.parse('$baseUrl/api/v1/cart/checkout/create'),
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-          'ngrok-skip-browser-warning': 'true',
-          'Host': 'depop-backend.test',
-        },
+     headers: _getHeaders(token),
         body: json.encode(orderData),
       ).timeout(const Duration(seconds: 15));
 

@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../models/product.dart';
 import 'dart:io'; 
 import 'auth_service.dart';  // Add this import
+import '../config.dart';
 
 
 class ProductCache {
@@ -11,7 +12,16 @@ class ProductCache {
   static Future<List<Product>>? _loadingFuture;
   static bool _isLoading = false;
   
+
+
 static Future<List<Product>> getProducts({int limit = 20}) async {
+
+    // 🔴 CRITICAL DEBUG - ADD THESE LINES
+  print('========== PRODUCT CACHE DEBUG ==========');
+  print('getProducts() called with limit: $limit');
+  print('About to call ApiService.fetchProducts()');
+  print('ApiService.baseUrl = ${ApiService.baseUrl}');
+  print('=========================================');
   if (_cachedProducts != null) {
     print('📦 Returning ${_cachedProducts!.length} cached products');
     return _cachedProducts!;
@@ -35,6 +45,7 @@ static Future<List<Product>> getProducts({int limit = 20}) async {
     _loadingFuture = null;
   }
 }
+
 
 static Future<List<Product>> _fetchProductsWithRetry({int limit = 20}) async {
   for (int attempt = 1; attempt <= 3; attempt++) {
@@ -64,36 +75,30 @@ static Future<List<Product>> _fetchProductsWithRetry({int limit = 20}) async {
 }
 
 class ApiService {
-  // static const String baseUrl = "https://untimid-nonobjectivistic-wade.ngrok-free.dev";
-static const String baseUrl = 'http://10.0.2.2:80';
+static String get baseUrl => AppConfig.baseUrl;
   
-  // SIMPLIFIED HEADERS
-static Map<String, String> get _headers {
-  return {
-    'Accept': 'application/json',
-    'ngrok-skip-browser-warning': 'true',
-    'Host': 'depop-backend.test',  // ADD THIS LINE
-  };
-} 
+static Map<String, String> get _headers => AppConfig.getHeaders();
+
+static Map<String, String> _headersWithToken(String? token) {
+  return AppConfig.getHeaders(token: token);
+}
   
-  // NEW: Minimal test method
-  static Future<void> testMinimalRequest() async {
-    print('🧪 Testing minimal request to health endpoint...');
+// NEW: Minimal test method
+static Future<void> testMinimalRequest() async {
+  print('🧪 Testing minimal request to health endpoint...');
+  
+  try {
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/health'),
+      headers: _headers,  // ← Use _headers instead of hardcoded
+    ).timeout(Duration(seconds: 10));
     
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/health'),
-        headers: {
-          'Accept': 'application/json',
-        },
-      ).timeout(Duration(seconds: 10));
-      
-      print('✅ Health test - Status: ${response.statusCode}');
-      print('✅ Health test - Body: ${response.body}');
-    } catch (e) {
-      print('❌ Health test failed: $e');
-    }
+    print('✅ Health test - Status: ${response.statusCode}');
+    print('✅ Health test - Body: ${response.body}');
+  } catch (e) {
+    print('❌ Health test failed: $e');
   }
+}
   
   static Future<Map<String, dynamic>> testConnection() async {
   print('🔧 Testing API connection...');
@@ -121,10 +126,19 @@ static Map<String, String> get _headers {
 }
   
   static Future<List<Product>> fetchProducts({
+     
   int page = 1,
   int limit = 12, // Default to 12 items (you can change this)
   String? category,
+
 }) async {
+   print('========== API SERVICE DEBUG ==========');
+  print('fetchProducts() called');
+  print('baseUrl = $baseUrl');
+  print('Platform.isAndroid = ${Platform.isAndroid}');
+  print('isEmulator = false (hardcoded)');
+  print('Final URL will be: $baseUrl/api/v1/listing/public/products/show?page=$page&limit=$limit');
+  print('=======================================');
   print('🛍️ Fetching products - Page: $page, Limit: $limit${category != null ? ", Category: $category" : ""}');
   
   try {
@@ -230,12 +244,7 @@ static Map<String, String> get _headers {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/v1/auth/login'),
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',   
-          'Host': 'depop-backend.test',  // ✅ ADD THIS LINE
-        },
+       headers: AppConfig.getHeaders(token: null, includeHost: true),
         body: jsonEncode({
           'login': login,           // IMPORTANT: Uses 'login' field
           'password': password,
@@ -287,11 +296,7 @@ static Map<String, String> get _headers {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/v1/auth/verify'),
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-        },
+      headers: AppConfig.getHeaders(token: null),
         body: jsonEncode({
           'phone': phone,
         }),
@@ -334,11 +339,7 @@ static Map<String, String> get _headers {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/v1/auth/verify-otp'),
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-        },
+       headers: AppConfig.getHeaders(token: null),
         body: jsonEncode({
           'phone': phone,
           'otp': otp,
@@ -378,11 +379,7 @@ static Map<String, String> get _headers {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/api/v1/auth/user'),
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-          'ngrok-skip-browser-warning': 'true',
-        },
+     headers: AppConfig.getHeaders(token: null),
       ).timeout(const Duration(seconds: 15));
 
       print('📡 Profile Response Status: ${response.statusCode}');
@@ -415,12 +412,7 @@ static Map<String, String> get _headers {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/v1/auth/logout'),
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-          'ngrok-skip-browser-warning': 'true',
-        },
+       headers: AppConfig.getHeaders(token: null),
       ).timeout(const Duration(seconds: 15));
 
       print('📡 Logout Response Status: ${response.statusCode}');
@@ -449,11 +441,7 @@ static Map<String, String> get _headers {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/api/health'),
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-          'ngrok-skip-browser-warning': 'true',
-        },
+       headers: AppConfig.getHeaders(token: null),
       ).timeout(const Duration(seconds: 10));
 
       return response.statusCode == 200;
@@ -481,15 +469,10 @@ static Future<List<Product>> getUserProducts(String token, {String status = 'all
     
     print('🌐 URL: $url');
     
-    final response = await http.get(
-      Uri.parse(url),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-        'ngrok-skip-browser-warning': 'true',  
-         'Host': 'depop-backend.test',
-      },
-    ).timeout(const Duration(seconds: 15));
+   final response = await http.get(
+  Uri.parse(url),
+  headers: _headersWithToken(token),
+).timeout(const Duration(seconds: 15));
 
     print('📡 User Products Status: ${response.statusCode}');
     print('📡 Response length: ${response.body.length} chars');
@@ -605,13 +588,9 @@ static Future<void> testBackendEndpoints(String token) async {
   
   try {
     final response = await http.get(
-      Uri.parse(endpoint),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-        'ngrok-skip-browser-warning': 'true',
-      },
-    ).timeout(const Duration(seconds: 15));
+  Uri.parse(endpoint),
+  headers: _headersWithToken(token),
+).timeout(const Duration(seconds: 15));
     
     print('📡 Status: ${response.statusCode}');
     
@@ -842,10 +821,7 @@ static Future<List<Map<String, dynamic>>> getUserAddresses(String token) async {
   try {
     final response = await http.get(
       Uri.parse('$baseUrl/api/v1/user/addresses'),
-      headers: {
-        ..._headers,
-        'Authorization': 'Bearer $token',
-      },
+      headers: AppConfig.getHeaders(token: token),
     ).timeout(const Duration(seconds: 15));
 
     print('📡 Addresses Status: ${response.statusCode}');
@@ -964,10 +940,10 @@ static Future<Map<String, dynamic>> createListing({
   try {
     var request = http.MultipartRequest('POST', Uri.parse(endpoint));
     
-    // Headers
-    request.headers['Accept'] = 'application/json';
-    request.headers['Authorization'] = 'Bearer $token';
-    request.headers['ngrok-skip-browser-warning'] = 'true';
+   
+// Add headers from AppConfig
+request.headers.addAll(AppConfig.getMultipartHeaders(token: token));
+    
     
     print('📤 SENDING DATA TO LARAVEL:');
     
@@ -1196,14 +1172,9 @@ static Future<Map<String, dynamic>> getSellerProfile(String sellerId) async {
     final token = authService.token;
     
     final response = await http.get(
-      Uri.parse('$baseUrl/api/v1/users/$sellerId/profile'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': token != null ? 'Bearer $token' : '',
-        'ngrok-skip-browser-warning': 'true',   
-          'Host': 'depop-backend.test',
-      },
-    ).timeout(const Duration(seconds: 10));
+  Uri.parse('$baseUrl/api/v1/users/$sellerId/profile'),
+  headers: _headersWithToken(token),
+).timeout(const Duration(seconds: 10));
 
     print('📡 Profile Response Status: ${response.statusCode}');
     
@@ -1237,14 +1208,9 @@ static Future<Map<String, dynamic>> getSellerShop(String sellerId) async {
     final token = authService.token;
     
     final response = await http.get(
-      Uri.parse('$baseUrl/api/v1/shop/$sellerId/shop'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': token != null ? 'Bearer $token' : '',
-        'ngrok-skip-browser-warning': 'true', 
-        'Host': 'depop-backend.test',
-      },
-    ).timeout(const Duration(seconds: 10));
+  Uri.parse('$baseUrl/api/v1/shop/$sellerId/shop'),
+  headers: _headersWithToken(token),
+).timeout(const Duration(seconds: 10));
 
     print('📡 Shop Response Status: ${response.statusCode}');
     
@@ -1274,15 +1240,10 @@ static Future<Map<String, dynamic>> getSellerRatings(String sellerId) async {
     await authService.isLoggedIn();
     final token = authService.token;
     
-    final response = await http.get(
-      Uri.parse('$baseUrl/api/v1/users/$sellerId/ratings'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': token != null ? 'Bearer $token' : '',
-        'ngrok-skip-browser-warning': 'true', 
-          'Host': 'depop-backend.test',
-      },
-    ).timeout(const Duration(seconds: 10));
+final response = await http.get(
+  Uri.parse('$baseUrl/api/v1/users/$sellerId/ratings'),
+  headers: _headersWithToken(token),
+).timeout(const Duration(seconds: 10));
 
     print('📡 Ratings Response Status: ${response.statusCode}');
     
@@ -1315,14 +1276,10 @@ static Future<List<Map<String, dynamic>>> getSellerReviews(String sellerId) asyn
     await authService.isLoggedIn();
     final token = authService.token;
     
-    final response = await http.get(
-      Uri.parse('$baseUrl/api/v1/users/$sellerId/reviews'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': token != null ? 'Bearer $token' : '',
-        'ngrok-skip-browser-warning': 'true',
-      },
-    ).timeout(const Duration(seconds: 10));
+   final response = await http.get(
+  Uri.parse('$baseUrl/api/v1/users/$sellerId/reviews'),
+  headers: _headersWithToken(token),
+).timeout(const Duration(seconds: 10));
 
     print('📡 Reviews Response Status: ${response.statusCode}');
     
@@ -1355,14 +1312,10 @@ static Future<Map<String, dynamic>> getUserStats() async {
       return {'success': false, 'error': 'Not authenticated'};
     }
     
-    final response = await http.get(
-      Uri.parse('$baseUrl/api/v1/users/user/stats'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-        'ngrok-skip-browser-warning': 'true',
-      },
-    ).timeout(const Duration(seconds: 10));
+  final response = await http.get(
+  Uri.parse('$baseUrl/api/v1/users/user/stats'),
+  headers: _headersWithToken(token),
+).timeout(const Duration(seconds: 10));
 
     print('📡 Stats Response Status: ${response.statusCode}');
     
@@ -1395,16 +1348,10 @@ static Future<bool> followUser(String userId) async {
     
     if (token == null) return false;
     
-    final response = await http.post(
-      Uri.parse('$baseUrl/api/v1/users/$userId/follow'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true', 
-        'Host': 'depop-backend.test',
-      },
-    ).timeout(const Duration(seconds: 10));
+   final response = await http.post(
+  Uri.parse('$baseUrl/api/v1/users/$userId/follow'),
+  headers: _headersWithToken(token),
+).timeout(const Duration(seconds: 10));
 
     print('📡 Follow Response Status: ${response.statusCode}');
     return response.statusCode == 200 || response.statusCode == 201;
@@ -1428,14 +1375,9 @@ static Future<bool> unfollowUser(String userId) async {
     if (token == null) return false;
     
     final response = await http.delete(
-      Uri.parse('$baseUrl/api/v1/users/$userId/unfollow'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-        'ngrok-skip-browser-warning': 'true', 
-          'Host': 'depop-backend.test',
-      },
-    ).timeout(const Duration(seconds: 10));
+  Uri.parse('$baseUrl/api/v1/users/$userId/unfollow'),
+  headers: _headersWithToken(token),
+).timeout(const Duration(seconds: 10));
 
     print('📡 Unfollow Response Status: ${response.statusCode}');
     return response.statusCode == 200 || response.statusCode == 204;
@@ -1457,14 +1399,10 @@ static Future<List<Map<String, dynamic>>> getMyFollowers() async {
     
     if (token == null) return [];
     
-    final response = await http.get(
-      Uri.parse('$baseUrl/api/v1/users/followers'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-        'ngrok-skip-browser-warning': 'true',
-      },
-    ).timeout(const Duration(seconds: 10));
+   final response = await http.get(
+  Uri.parse('$baseUrl/api/v1/users/followers'),
+  headers: _headersWithToken(token),
+).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       final Map<String, dynamic> responseData = json.decode(response.body);
@@ -1491,14 +1429,10 @@ static Future<List<Map<String, dynamic>>> getMyFollowing() async {
     
     if (token == null) return [];
     
-    final response = await http.get(
-      Uri.parse('$baseUrl/api/v1/users/following'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-        'ngrok-skip-browser-warning': 'true',
-      },
-    ).timeout(const Duration(seconds: 10));
+ final response = await http.get(
+  Uri.parse('$baseUrl/api/v1/users/following'),
+  headers: _headersWithToken(token),
+).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       final Map<String, dynamic> responseData = json.decode(response.body);
@@ -1532,15 +1466,10 @@ static Future<List<Product>> getSellerProducts(String sellerId) async {
     await authService.isLoggedIn();
     final token = authService.token;
     
-    final response = await http.get(
-      Uri.parse('$baseUrl/api/v1/listing/seller/$sellerId'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': token != null ? 'Bearer $token' : '',
-        'ngrok-skip-browser-warning': 'true',
-        'Host': 'depop-backend.test',
-      },
-    ).timeout(const Duration(seconds: 10));
+ final response = await http.get(
+  Uri.parse('$baseUrl/api/v1/listing/seller/$sellerId'),
+  headers: _headersWithToken(token),
+).timeout(const Duration(seconds: 10));
 
     print('📡 Seller Products Status: ${response.statusCode}');
     

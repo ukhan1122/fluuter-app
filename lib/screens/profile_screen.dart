@@ -12,6 +12,9 @@ import '../screens/create_listing_screen.dart';
 import '../widgets/product_detail.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
+import '../services/auth_product_service.dart';
+import '../screens/received_offers_screen.dart';
+import '../config.dart';  // Add this with other imports
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -67,6 +70,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     _emailController.dispose();
     super.dispose();
   }
+  
 // Load from SharedPreferences cache
 Future<void> _loadFromCache() async {
   try {
@@ -178,15 +182,10 @@ Future<void> _loadFromCache() async {
       String authUrl = '${ApiService.baseUrl}/api/v1/auth/user';
       print('🌐 Trying auth endpoint: $authUrl');
       
-      final authResponse = await http.get(
-        Uri.parse(authUrl),
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $authToken',
-          'ngrok-skip-browser-warning': 'true',
-          'Host': 'depop-backend.test',
-        },
-      ).timeout(const Duration(seconds: 10));
+  final authResponse = await http.get(
+  Uri.parse(authUrl),
+  headers: AppConfig.getHeaders(token: authToken),
+).timeout(const Duration(seconds: 10));
       
       print('📡 Auth Response Status: ${authResponse.statusCode}');
       
@@ -326,16 +325,10 @@ Future<void> _loadFromCache() async {
       // Try user endpoint
       String altEndpoint = '${ApiService.baseUrl}/api/v1/user';
       print('🌐 Alternative endpoint: $altEndpoint');
-      
       final response = await http.get(
-        Uri.parse(altEndpoint),
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $authToken',
-          'ngrok-skip-browser-warning': 'true',
-          'Host': 'depop-backend.test',
-        },
-      ).timeout(const Duration(seconds: 10));
+  Uri.parse(altEndpoint),
+  headers: AppConfig.getHeaders(token: authToken),
+).timeout(const Duration(seconds: 10));
       
       print('📡 Alternative Response Status: ${response.statusCode}');
       
@@ -810,6 +803,7 @@ Future<void> _fetchUserStatsWithId(String userId) async {
                     
                     const SizedBox(height: 30),
                     
+                    // Save Button for Edit Profile
                     SizedBox(
                       width: double.infinity,
                       height: 55,
@@ -818,7 +812,6 @@ Future<void> _fetchUserStatsWithId(String userId) async {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red,
                           foregroundColor: Colors.white,
-                          elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(15),
                           ),
@@ -915,17 +908,11 @@ Future<void> _fetchUserStatsWithId(String userId) async {
       String endpoint = '${ApiService.baseUrl}/api/v1/user/preferences';
       print('🌐 Endpoint: $endpoint');
       
-      final response = await http.post(
-        Uri.parse(endpoint),
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $authToken',
-          'ngrok-skip-browser-warning': 'true',
-          'Host': 'depop-backend.test',
-        },
-        body: json.encode(updateData),
-      ).timeout(const Duration(seconds: 15));
+     final response = await http.post(
+  Uri.parse(endpoint),
+  headers: AppConfig.getHeaders(token: authToken),
+  body: json.encode(updateData),
+).timeout(const Duration(seconds: 15));
 
       print('📡 Update Profile Status: ${response.statusCode}');
       print('📡 Update Profile Response: ${response.body}');
@@ -1166,61 +1153,138 @@ Future<void> _fetchUserStatsWithId(String userId) async {
     );
   }
 
-  Widget _buildStatsCards() {
-    final totalItems = sellingItems.length + soldItems.length;
+ Widget _buildStatsCards() {
+  final totalItems = sellingItems.length + soldItems.length;
 
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  icon: Icons.inventory_2_outlined,
-                  value: totalItems.toString(),
-                  label: 'Total Items',
-                  color: Colors.blue,
-                ),
+  return Padding(
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildStatCard(
+                icon: Icons.inventory_2_outlined,
+                value: totalItems.toString(),
+                label: 'Total Items',
+                color: Colors.blue,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildStatCard(
-                  icon: Icons.attach_money,
-                  value: 'PKR ${totalEarnings.toStringAsFixed(0)}',
-                  label: 'Earnings',
-                  color: Colors.green,
-                ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildStatCard(
+                icon: Icons.attach_money,
+                value: 'PKR ${totalEarnings.toStringAsFixed(0)}',
+                label: 'Earnings',
+                color: Colors.green,
               ),
-            ],
+            ),
+          ],
+        ),
+        
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildStatCard(
+                icon: Icons.people_outline,
+                value: totalFollowers.toString(),
+                label: 'Followers',
+                color: Colors.purple,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildStatCard(
+                icon: Icons.person_add_outlined,
+                value: totalFollowing.toString(),
+                label: 'Following',
+                color: Colors.orange,
+              ),
+            ),
+          ],
+        ),
+        
+        // 👇 ADD THIS NEW SECTION FOR OFFERS BUTTON
+        const SizedBox(height: 16),
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ReceivedOffersScreen()),
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.grey[200]!),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.local_offer,
+                    color: Colors.orange,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Received Offers',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'View and manage offers on your items',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
           ),
-          
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  icon: Icons.people_outline,
-                  value: totalFollowers.toString(),
-                  label: 'Followers',
-                  color: Colors.purple,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildStatCard(
-                  icon: Icons.person_add_outlined,
-                  value: totalFollowing.toString(),
-                  label: 'Following',
-                  color: Colors.orange,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildStatCard({
     required IconData icon,
@@ -1366,166 +1430,289 @@ Future<void> _fetchUserStatsWithId(String userId) async {
     );
   }
 
-  Widget _buildProductCard(Product product, {required bool isSold}) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ProductDetailScreen.fromProduct(product: product),
-          ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
+ Widget _buildProductCard(Product product, {required bool isSold}) {
+  return Container(
+    margin: const EdgeInsets.only(bottom: 16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Column(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.horizontal(
-                    left: Radius.circular(20),
+            // Image section (same as before)
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ProductDetailScreen.fromProduct(product: product),
                   ),
-                  child: Container(
-                    width: 120,
-                    height: 140,
-                    color: Colors.grey[100],
-                    child: product.photoUrls.isNotEmpty
-                        ? Image.network(
-                            product.photoUrls.first,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Center(
-                                child: Icon(
-                                  Icons.broken_image,
-                                  size: 40,
-                                  color: Colors.grey[400],
-                                ),
-                              );
-                            },
-                          )
-                        : Center(
-                            child: Icon(
-                              Icons.image,
-                              size: 40,
-                              color: Colors.grey[400],
+                );
+              },
+              child: ClipRRect(
+                borderRadius: const BorderRadius.horizontal(
+                  left: Radius.circular(20),
+                ),
+                child: Container(
+                  width: 120,
+                  height: 140,
+                  color: Colors.grey[100],
+                  child: product.photoUrls.isNotEmpty
+                      ? Image.network(
+                          product.photoUrls.first,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Center(
+                              child: Icon(
+                                Icons.broken_image,
+                                size: 40,
+                                color: Colors.grey[400],
+                              ),
+                            );
+                          },
+                        )
+                      : Center(
+                          child: Icon(
+                            Icons.image,
+                            size: 40,
+                            color: Colors.grey[400],
+                          ),
+                        ),
+                ),
+              ),
+            ),
+            
+            // Product details with edit/delete buttons
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Title
+                    Text(
+                      product.title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    
+                    const SizedBox(height: 8),
+                    
+                    // Status and Price
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSold ? Colors.green.shade50 : Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            isSold ? 'SOLD' : 'ACTIVE',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: isSold ? Colors.green : Colors.red,
                             ),
                           ),
-                  ),
-                ),
-                
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                        ),
+                        const SizedBox(width: 8),
                         Text(
-                          product.title,
-                          style: const TextStyle(
+                          'PKR ${product.price.toStringAsFixed(0)}',
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
+                            color: isSold ? Colors.green.shade700 : Colors.red.shade700,
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        
-                        const SizedBox(height: 8),
-                        
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isSold ? Colors.green.shade50 : Colors.red.shade50,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                isSold ? 'SOLD' : 'ACTIVE',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: isSold ? Colors.green : Colors.red,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'PKR ${product.price.toStringAsFixed(0)}',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: isSold ? Colors.green.shade700 : Colors.red.shade700,
-                              ),
-                            ),
-                          ],
-                        ),
-                        
-                        const SizedBox(height: 12),
-                        
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: [
-                            if (product.categoryName != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  product.categoryName!,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.blue.shade700,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            if (product.conditionTitle != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  product.conditionTitle!,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.orange.shade700,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                          ],
                         ),
                       ],
                     ),
-                  ),
+                    
+                    const SizedBox(height: 12),
+                    
+                    // Category and Condition tags
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        if (product.categoryName != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              product.categoryName!,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.blue.shade700,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        if (product.conditionTitle != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              product.conditionTitle!,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.orange.shade700,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 12),
+                    
+                    // Edit/Delete buttons (only for active/selling items)
+                    if (!isSold)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _editProduct(product),
+                              icon: const Icon(Icons.edit, size: 16),
+                              label: const Text('Edit'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.blue,
+                                side: BorderSide(color: Colors.blue.shade200),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _confirmDeleteProduct(product),
+                              icon: const Icon(Icons.delete_outline, size: 16),
+                              label: const Text('Delete'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red,
+                                side: BorderSide(color: Colors.red.shade200),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ],
         ),
+      ],
+    ),
+  );
+}
+
+Future<void> _confirmDeleteProduct(Product product) async {
+  return showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: const Text('Delete Product'),
+        content: Text('Are you sure you want to delete "${product.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CANCEL'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context); // Close dialog
+              await _deleteProduct(product);
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('DELETE'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Future<void> _deleteProduct(Product product) async {
+  setState(() {
+    _isLoading = true;
+  });
+
+  try {
+    bool deleted = await AuthProductService.deleteProduct(
+      productId: product.id.toString(),
+    );
+
+    if (deleted) {
+      // Remove from local lists
+      setState(() {
+        sellingItems.removeWhere((p) => p.id == product.id);
+        soldItems.removeWhere((p) => p.id == product.id);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Product deleted successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to delete product'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } catch (e) {
+    print('❌ Error deleting product: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Error: ${e.toString()}'),
+        backgroundColor: Colors.red,
       ),
     );
+  } finally {
+    setState(() {
+      _isLoading = false;
+    });
   }
+}
+
+Future<void> _editProduct(Product product) async {
+  await _showEditProductPopup(product);
+}
 
   Widget _buildEmptyState({
     required IconData icon,
@@ -1600,4 +1787,485 @@ Future<void> _fetchUserStatsWithId(String userId) async {
       ),
     );
   }
+
+// Add this method to show edit product popup
+Future<void> _showEditProductPopup(Product product) async {
+  // Find the UPDATED product from sellingItems list
+  Product currentProduct = sellingItems.firstWhere(
+    (p) => p.id == product.id,
+    orElse: () => product,
+  );
+
+  // Create local controllers with UPDATED product data
+  TextEditingController titleController = TextEditingController(text: currentProduct.title);
+  TextEditingController descriptionController = TextEditingController(text: currentProduct.description);
+  TextEditingController priceController = TextEditingController(text: currentProduct.price.toString());
+  TextEditingController quantityController = TextEditingController(text: currentProduct.quantityLeft.toString());
+  
+  // Lists for images only
+  List<File> newImages = [];
+  List<String> existingImages = List.from(currentProduct.photoUrls);
+  
+  bool isLoading = false;
+  bool isSaving = false;
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => StatefulBuilder(
+      builder: (BuildContext context, StateSetter setState) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.9,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+          ),
+          child: Column(
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              
+              // Header
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    const Text(
+                      'Edit Product',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close, size: 18),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Content
+              Expanded(
+                child: isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : SingleChildScrollView(
+                        padding: const EdgeInsets.all(20),
+                        child: Form(
+                          key: GlobalKey<FormState>(),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Images Section
+                              _buildEditImagesSection(
+                                existingImages: existingImages,
+                                newImages: newImages,
+                                onAddImage: () async {
+                                  final ImagePicker picker = ImagePicker();
+                                  final XFile? image = await picker.pickImage(
+                                    source: ImageSource.gallery,
+                                    maxWidth: 800,
+                                    maxHeight: 800,
+                                    imageQuality: 85,
+                                  );
+                                  if (image != null) {
+                                    setState(() {
+                                      newImages.add(File(image.path));
+                                    });
+                                  }
+                                },
+                                onRemoveExisting: (index) {
+                                  setState(() {
+                                    existingImages.removeAt(index);
+                                  });
+                                },
+                                onRemoveNew: (index) {
+                                  setState(() {
+                                    newImages.removeAt(index);
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 24),
+                              
+                              // Title
+                              _buildEditTextField(
+                                controller: titleController,
+                                label: 'Title',
+                                icon: Icons.title,
+                              ),
+                              const SizedBox(height: 16),
+                              
+                              // Description
+                              _buildEditTextField(
+                                controller: descriptionController,
+                                label: 'Description',
+                                icon: Icons.description,
+                                maxLines: 3,
+                              ),
+                              const SizedBox(height: 16),
+                              
+                              // Price and Quantity Row
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildEditTextField(
+                                      controller: priceController,
+                                      label: 'Price (PKR)',
+                                      icon: Icons.attach_money,
+                                      keyboardType: TextInputType.number,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _buildEditTextField(
+                                      controller: quantityController,
+                                      label: 'Quantity',
+                                      icon: Icons.numbers,
+                                      keyboardType: TextInputType.number,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 32),
+                              
+                              // Save Button - Sends ONLY what backend expects
+                              SizedBox(
+                                width: double.infinity,
+                                height: 55,
+                                child: ElevatedButton(
+                                  onPressed: isSaving ? null : () async {
+                                    setState(() => isSaving = true);
+                                    
+                                    try {
+                                      // Prepare update data - ONLY fields the backend expects
+                                      Map<String, dynamic> updateData = {
+                                        'title': titleController.text.trim(),
+                                        'description': descriptionController.text.trim(),
+                                        'price': double.parse(priceController.text.trim()).toString(),
+                                        'quantity': int.parse(quantityController.text.trim()).toString(),
+                                      };
+                                      
+                                      print('📤 Sending update data: $updateData');
+                                      
+                                      // Update product details
+                                      final updateResult = await AuthProductService.updateProduct(
+                                        productId: product.id.toString(),
+                                        productData: updateData,
+                                      );
+                                      
+                                      if (updateResult['success'] == true) {
+                                        // Upload new images if any
+                                        if (newImages.isNotEmpty) {
+                                          await AuthProductService.updateProductPhotos(
+                                            productId: product.id.toString(),
+                                            images: newImages.map((f) => f.path).toList(),
+                                          );
+                                        }
+                                        
+                                        Navigator.pop(context);
+                                        await _fetchUserProducts(); // Refresh list
+                                        
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Product updated successfully!'),
+                                              backgroundColor: Colors.green,
+                                            ),
+                                          );
+                                        }
+                                      } else {
+                                        throw Exception(updateResult['error']);
+                                      }
+                                    } catch (e) {
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Error: ${e.toString()}'),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      }
+                                    } finally {
+                                      if (mounted) {
+                                        setState(() => isSaving = false);
+                                      }
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(15),
+                                    ),
+                                  ),
+                                  child: isSaving
+                                      ? const SizedBox(
+                                          height: 20,
+                                          width: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Text(
+                                          'Save Changes',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+}
+
+// Helper method for edit text fields
+Widget _buildEditTextField({
+  required TextEditingController controller,
+  required String label,
+  required IconData icon,
+  TextInputType? keyboardType,
+  int maxLines = 1,
+}) {
+  return Container(
+    decoration: BoxDecoration(
+      color: Colors.grey[50],
+      borderRadius: BorderRadius.circular(15),
+      border: Border.all(color: Colors.grey[200]!),
+    ),
+    child: TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: Colors.grey[600]),
+        prefixIcon: Icon(icon, color: Colors.red[400]),
+        border: InputBorder.none,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+      ),
+    ),
+  );
+}
+
+// Helper method for edit dropdowns
+Widget _buildEditDropdown({
+  required String? value,
+  required List<Map<String, dynamic>> items,
+  required String label,
+  required IconData icon,
+  required String Function(Map<String, dynamic>) displayName,
+  required Function(String?) onChanged,
+}) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    decoration: BoxDecoration(
+      color: Colors.grey[50],
+      borderRadius: BorderRadius.circular(15),
+      border: Border.all(color: Colors.grey[200]!),
+    ),
+    child: DropdownButtonFormField<String>(
+      value: value,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: Colors.grey[600]),
+        prefixIcon: Icon(icon, color: Colors.red[400]),
+        border: InputBorder.none,
+      ),
+      items: items.map((item) {
+        return DropdownMenuItem<String>(
+          value: item['id']?.toString(),
+          child: Text(displayName(item)),
+        );
+      }).toList(),
+      onChanged: onChanged,
+    ),
+  );
+}
+
+// Helper method for edit images section
+Widget _buildEditImagesSection({
+  required List<String> existingImages,
+  required List<File> newImages,
+  required VoidCallback onAddImage,
+  required Function(int) onRemoveExisting,
+  required Function(int) onRemoveNew,
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'Product Images',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      const SizedBox(height: 12),
+      
+      // Existing Images
+      if (existingImages.isNotEmpty) ...[
+        const Text(
+          'Current Images',
+          style: TextStyle(fontSize: 14, color: Colors.grey),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 100,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: existingImages.length,
+            itemBuilder: (context, index) {
+              return Stack(
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      image: DecorationImage(
+                        image: NetworkImage(existingImages[index]),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 4,
+                    right: 12,
+                    child: GestureDetector(
+                      onTap: () => onRemoveExisting(index),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+
+      // New Images
+      if (newImages.isNotEmpty) ...[
+        const Text(
+          'New Images',
+          style: TextStyle(fontSize: 14, color: Colors.grey),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 100,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: newImages.length,
+            itemBuilder: (context, index) {
+              return Stack(
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      image: DecorationImage(
+                        image: FileImage(newImages[index]),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 4,
+                    right: 12,
+                    child: GestureDetector(
+                      onTap: () => onRemoveNew(index),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+
+      // Add Image Button
+      GestureDetector(
+        onTap: onAddImage,
+        child: Container(
+          width: 100,
+          height: 100,
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add_photo_alternate, color: Colors.grey[600], size: 30),
+              const SizedBox(height: 4),
+              Text(
+                'Add Image',
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
+}
 }

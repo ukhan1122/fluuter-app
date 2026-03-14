@@ -14,6 +14,7 @@ import 'dart:async'; // For TimeoutException
 import 'dart:convert'; // For jsonEncode
 import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
+import '../config.dart';  // Add this import
 
 class ProductDetailScreen extends StatefulWidget {
   final String title, brand, price, category;
@@ -1752,13 +1753,7 @@ Future<Map<String, dynamic>> _makeOffer({
     
     final response = await http.post(
       url,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-        'ngrok-skip-browser-warning': 'true',
-        'Host': 'depop-backend.test',
-      },
+    headers: AppConfig.getHeaders(token: token),
       body: jsonEncode({
         'product_id': productId,
         'offer_price': offerPrice,

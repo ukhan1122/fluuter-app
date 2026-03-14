@@ -5,6 +5,8 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../services/api_service.dart';
+import 'dart:math';  // Add this for min() function
+import '../config.dart';  // Add this with other imports
 
 
 
@@ -1080,8 +1082,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       ),
     );
   }
-
- Future<void> _submitListing() async {
+Future<void> _submitListing() async {
   if (_formKey.currentState!.validate()) {
     _formKey.currentState!.save();
     
@@ -1090,6 +1091,11 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       _showSnackBar('Please login first', Colors.red);
       return;
     }
+    
+    // DEBUG: Print the base URL and endpoint
+    print('🔍 Base URL: ${ApiService.baseUrl}');
+    print('🔍 Full endpoint: ${ApiService.baseUrl}/api/v1/listing/auth/products/create');
+    print('🔍 Auth token: ${_authToken?.substring(0, min(20, _authToken!.length))}...');
     
     if (_city.isEmpty) {
       _showSnackBar('Please select a city', Colors.red);
@@ -1119,43 +1125,43 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     try {
       String? addressId;
       
-      // Try to create address with correct field names
-      try {
-        final addressData = {
-          'address_line_1': _addressLine1,
-          'address_line_2': _addressLine2.isEmpty ? '' : _addressLine2,
-          'city': _city,
-          'state_province_or_region': _state,
-          'zip_or_postal_code': _zipCode,
-          'country': _country,
-          'address_type': 'pickup',
-        };
-        
-        print('🏠 Creating address with data: $addressData');
-        
-        final addressResponse = await http.post(
-          Uri.parse('${ApiService.baseUrl}/api/v1/user/address'),
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $_authToken',
-            'ngrok-skip-browser-warning': 'true',
-          },
-          body: jsonEncode(addressData),
-        ).timeout(const Duration(seconds: 15));
-        
-        if (addressResponse.statusCode == 200 || addressResponse.statusCode == 201) {
-          final addressResult = json.decode(addressResponse.body);
-          addressId = addressResult['data']?['id']?.toString() ?? 
-                      addressResult['id']?.toString();
-          
-          if (addressId != null && addressId.isNotEmpty) {
-            print('✅ Address created with ID: $addressId');
-          }
-        }
-      } catch (e) {
-        print('⚠️ Address creation error: $e');
-      }
+   // Replace your current address creation with this:
+try {
+  final addressData = {
+    'address_line_1': _addressLine1,
+    'address_line_2': _addressLine2.isEmpty ? '' : _addressLine2,
+    'city': _city,
+    'state_province_or_region': _state,
+    'zip_or_postal_code': _zipCode,
+    'country': _country,
+    'address_type': 'pickup',
+  };
+  
+  print('🏠 Creating address with data: $addressData');
+  print('📡 Full URL: ${ApiService.baseUrl}/api/v1/user/address');
+  
+ final addressResponse = await http.post(
+  Uri.parse('${ApiService.baseUrl}/api/v1/user/address'),
+  headers: AppConfig.getHeaders(token: _authToken),
+  body: jsonEncode(addressData),
+).timeout(const Duration(seconds: 15));
+  
+  print('📡 Address Response Status: ${addressResponse.statusCode}');
+  print('📡 Address Response Body: ${addressResponse.body}');
+  
+  if (addressResponse.statusCode == 200 || addressResponse.statusCode == 201) {
+    final addressResult = json.decode(addressResponse.body);
+    addressId = addressResult['data']?['id']?.toString() ?? 
+                addressResult['id']?.toString();
+    print('✅ Address created with ID: $addressId');
+  } else if (addressResponse.statusCode == 422) {
+    // Validation error
+    final errorData = json.decode(addressResponse.body);
+    print('❌ Validation errors: ${errorData['errors']}');
+  }
+} catch (e) {
+  print('⚠️ Address creation error: $e');
+}
       
       // 2. Create listing
       final Map<String, dynamic> listingData = {
@@ -1232,10 +1238,14 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         }
       }
       
-      if (result['success'] == true || result['status'] == 'success') {
-        _showSnackBar('Listing created successfully!', Colors.green);
-        Navigator.pop(context);
-      } else {
+    if (result['success'] == true || result['status'] == 'success') {
+  // Clear the product cache so new product appears in search
+  ProductCache.clearCache();
+  
+  _showSnackBar('Listing created successfully!', Colors.green);
+  Navigator.pop(context);
+}
+     else {
         String errorMessage = result['message'] ?? 'Failed to create listing';
         if (result['errors'] != null) {
           final errors = result['errors'] as Map<String, dynamic>;
