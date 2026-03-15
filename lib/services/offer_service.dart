@@ -292,6 +292,66 @@ static Future<List<Offer>> getReceivedOffers() async {
     }
   }
 
+/// 1.6 GET conversation between users for a specific product
+/// GET /api/v1/listing/products/offers/conversations
+static Future<List<Offer>> getConversation({
+  required int productId,
+  required int buyerId,
+  required int sellerId,
+}) async {
+  print('💬 Fetching conversation for product $productId between buyer $buyerId and seller $sellerId');
+  
+  try {
+    final authService = AuthService();
+    await authService.isLoggedIn();
+    final token = authService.token;
+    
+    if (token == null) {
+      print('❌ No auth token found');
+      return [];
+    }
+    
+    // Use both buyer_id and seller_id as required by the backend
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/listing/products/offers/conversations?product_id=$productId&buyer_id=$buyerId&seller_id=$sellerId'),
+      headers: _getHeaders(token),
+    ).timeout(const Duration(seconds: 15));
+
+    print('📡 Conversation Status: ${response.statusCode}');
+    print('📡 Response: ${response.body}');
+    
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> responseData = json.decode(response.body);
+      
+      List<dynamic> offersJson = [];
+      
+      // Handle different response structures
+      if (responseData.containsKey('data')) {
+        if (responseData['data'] is List) {
+          offersJson = responseData['data'] as List;
+        } else if (responseData['data'] is Map) {
+          final dataMap = responseData['data'] as Map;
+          if (dataMap.containsKey('offers') && dataMap['offers'] is List) {
+            offersJson = dataMap['offers'] as List;
+          } else if (dataMap.containsKey('conversation') && dataMap['conversation'] is List) {
+            offersJson = dataMap['conversation'] as List;
+          } else if (dataMap.containsKey('original') && dataMap['original'] is List) {
+            offersJson = dataMap['original'] as List;
+          }
+        }
+      }
+      
+      print('✅ Found ${offersJson.length} conversation messages');
+      return offersJson.map((json) => Offer.fromJson(json)).toList();
+    }
+    
+    return [];
+  } catch (e) {
+    print('❌ Error fetching conversation: $e');
+    return [];
+  }
+}
+
   /// 8. POST create offer
   /// POST /api/v1/listing/products/offers/create
   static Future<Map<String, dynamic>> createOffer({

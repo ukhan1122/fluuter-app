@@ -13,8 +13,8 @@ import '../widgets/product_detail.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import '../services/auth_product_service.dart';
-import '../screens/received_offers_screen.dart';
 import '../config.dart';  // Add this with other imports
+import 'received_offers_screen.dart';  // Add this line
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -1211,9 +1211,9 @@ Future<void> _fetchUserStatsWithId(String userId) async {
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const ReceivedOffersScreen()),
+MaterialPageRoute(builder: (context) => ReceivedOffersScreen()),
             );
-          },
+          },  
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(

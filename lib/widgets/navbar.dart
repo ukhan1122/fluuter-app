@@ -1,7 +1,8 @@
+import 'dart:async'; // Add this for Timer
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import '../screens/login.dart';
 import '../screens/signup.dart';
 import '../screens/home_screen.dart';
@@ -14,6 +15,9 @@ import '../screens/favorites_screen.dart';
 import '../screens/overview_screen.dart';
 import '../screens/my_listings_screen.dart';
 import '../screens/sold_items_screen.dart';
+import '../screens/received_offers_screen.dart';
+import '../services/offer_service.dart';
+import '../models/offer.dart';
 
 class CustomNavbar extends StatefulWidget implements PreferredSizeWidget {
   const CustomNavbar({super.key});
@@ -29,17 +33,20 @@ class _CustomNavbarState extends State<CustomNavbar> {
   String? _profilePicture;
   String? _userName;
   bool _isLoggedIn = false;
+  int _unreadOfferCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _loadUnreadOfferCount();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _loadUserData();
+    _loadUnreadOfferCount();
   }
 
   Future<void> _loadUserData() async {
@@ -68,6 +75,31 @@ class _CustomNavbarState extends State<CustomNavbar> {
       });
     }
   }
+
+Future<void> _loadUnreadOfferCount() async {
+  if (!_isLoggedIn) return;
+  
+  try {
+    print('🔄 Fetching unread offer count...');
+    final offers = await OfferService.getReceivedOffers();
+    print('📊 Total offers received: ${offers.length}');
+    
+    final unreadCount = offers.where((offer) => 
+      offer.status == 'pending'
+    ).length;
+    
+    print('📊 Pending offers found: $unreadCount');
+    
+    if (mounted) {
+      setState(() {
+        _unreadOfferCount = unreadCount;
+      });
+      print('✅ Updated badge count to: $_unreadOfferCount');
+    }
+  } catch (e) {
+    print('❌ Error loading unread offer count: $e');
+  }
+}
 
   void _navigateToHome(BuildContext context) {
     Navigator.pushAndRemoveUntil(
@@ -163,6 +195,7 @@ class _CustomNavbarState extends State<CustomNavbar> {
                 MaterialPageRoute(builder: (context) => const ProfileScreen()),
               ).then((_) {
                 _loadUserData();
+                _loadUnreadOfferCount();
               }),
               child: CircleAvatar(
                 radius: 20,
@@ -183,6 +216,7 @@ class _CustomNavbarState extends State<CustomNavbar> {
                 MaterialPageRoute(builder: (context) => const ProfileScreen()),
               ).then((_) {
                 _loadUserData();
+                _loadUnreadOfferCount();
               }),
               child: CircleAvatar(
                 radius: 20,
@@ -206,6 +240,7 @@ class _CustomNavbarState extends State<CustomNavbar> {
               MaterialPageRoute(builder: (context) => const LoginScreen()),
             ).then((_) {
               _loadUserData();
+              _loadUnreadOfferCount();
             }),
             child: const Text('Login', style: TextStyle(color: Colors.red)),
           ),
@@ -226,21 +261,47 @@ class CustomDrawer extends StatefulWidget {
   State<CustomDrawer> createState() => _CustomDrawerState();
 }
 
-class _CustomDrawerState extends State<CustomDrawer> {
+class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver {
   String? _profilePicture;
   String? _userName;
   bool _isLoggedIn = false;
+  int _unreadOfferCount = 0;
+  late Timer _timer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadUserData();
+    
+    _timer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (mounted && _isLoggedIn) {
+        _loadUnreadOfferCount();
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _isLoggedIn) {
+      _loadUnreadOfferCount();
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _loadUserData();
+    if (_isLoggedIn) {
+      _loadUnreadOfferCount();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _timer.cancel();
+    super.dispose();
   }
 
   Future<void> _loadUserData() async {
@@ -270,13 +331,49 @@ class _CustomDrawerState extends State<CustomDrawer> {
     }
   }
 
-  // NEW NAVIGATION METHODS
+  Future<void> _loadUnreadOfferCount() async {
+    if (!_isLoggedIn) return;
+    
+    try {
+      print('🔄 Fetching unread offer count...');
+      final offers = await OfferService.getReceivedOffers();
+      final unreadCount = offers.where((offer) => 
+        offer.status == 'pending'
+      ).length;
+      
+      print('📊 Unread offers found: $unreadCount');
+      
+      if (mounted) {
+        setState(() {
+          _unreadOfferCount = unreadCount;
+        });
+      }
+    } catch (e) {
+      print('❌ Error loading unread offer count: $e');
+    }
+  }
+
+  // ============ NAVIGATION METHODS ============
   void _navigateToOverview(BuildContext context) {
     Navigator.pop(context);
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const OverviewScreen()),
     );
+  }
+  
+  void _navigateToReceivedOffers(BuildContext context) {
+    setState(() {
+      _unreadOfferCount = 0;
+    });
+    
+    Navigator.pop(context);
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => ReceivedOffersScreen()),
+    ).then((_) {
+      _loadUnreadOfferCount();
+    });
   }
 
   void _navigateToMyListings(BuildContext context) {
@@ -345,6 +442,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
       MaterialPageRoute(builder: (context) => const LoginScreen()),
     ).then((_) {
       _loadUserData();
+      _loadUnreadOfferCount();
     });
   }
 
@@ -554,6 +652,15 @@ class _CustomDrawerState extends State<CustomDrawer> {
                     onTap: () => _navigateToSoldItems(context),
                   ),
                   
+                  // OFFERS MENU ITEM WITH BADGE
+                  _buildDrawerItem(
+                    icon: Icons.local_offer_outlined,
+                    title: 'Offers',
+                    onTap: () => _navigateToReceivedOffers(context),
+                    badge: _unreadOfferCount > 0 ? _unreadOfferCount.toString() : null,
+                    badgeColor: Colors.red,
+                  ),
+                                      
                   const Divider(height: 24, thickness: 1),
                   
                   _buildSectionTitle('ACCOUNT'),
@@ -665,6 +772,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
     required VoidCallback onTap,
     Color? iconColor,
     String? badge,
+    Color? badgeColor,
   }) {
     return ListTile(
       leading: Container(
@@ -691,15 +799,22 @@ class _CustomDrawerState extends State<CustomDrawer> {
           const SizedBox(width: 8),
           if (badge != null)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.green,
-                borderRadius: BorderRadius.circular(4),
+                color: badgeColor ?? Colors.red,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: (badgeColor ?? Colors.red).withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Text(
                 badge,
                 style: const TextStyle(
-                  fontSize: 10,
+                  fontSize: 11,
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
                 ),
