@@ -7,6 +7,12 @@ import '../models/offer.dart';
 import '../services/offer_service.dart';
 import '../widgets/product_detail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/product.dart' as model;
+import '../services/api_service.dart'; // For ProductCache
+import 'package:provider/provider.dart';
+import '../providers/cart_provider.dart';
+import '../screens/cart_screen.dart';
+import '../models/cart_item.dart';
 
 class ReceivedOffersScreen extends StatefulWidget {
   const ReceivedOffersScreen({super.key});
@@ -176,116 +182,185 @@ class _ReceivedOffersScreenState extends State<ReceivedOffersScreen> with Single
     );
   }
 
-  Widget _buildOfferCard(Offer offer) {
-    final currencyFormat = NumberFormat.currency(symbol: 'Rs. ', decimalDigits: 0);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      elevation: 2,
-      child: Column(
-        children: [
-          // Product Info
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-            ),
-            child: Row(
-              children: [
-                ClipRRect(
+Widget _buildOfferCard(Offer offer) {
+  final currencyFormat = NumberFormat.currency(symbol: 'Rs. ', decimalDigits: 0);
+  
+  // Check if this is YOUR product (you are the seller)
+  final bool isMyProduct = _currentUserId == offer.sellerId;
+
+  return Card(
+    margin: const EdgeInsets.only(bottom: 16),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(15),
+      side: isMyProduct 
+          ? const BorderSide(color: Colors.red, width: 2)  // Red border for your products
+          : BorderSide.none,
+    ),
+    elevation: 2,
+    child: Column(
+      children: [
+        // Product Info with red header for your products
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isMyProduct ? Colors.red.shade50 : Colors.grey[50],
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  color: Colors.grey[200],
+                  child: offer.productImage != null
+                      ? Image.network(offer.productImage!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.image))
+                      : const Icon(Icons.image),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            offer.productTitle ?? 'Unknown Product',
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (isMyProduct)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              'MY PRODUCT',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    Text(
+                      'Listed: ${currencyFormat.format(offer.productPrice ?? 0)}',
+                      style: TextStyle(fontSize: 12, color: Colors.black),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
                   borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    width: 50,
-                    height: 50,
-                    color: Colors.grey[200],
-                    child: offer.productImage != null
-                        ? Image.network(offer.productImage!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.image))
-                        : const Icon(Icons.image),
-                  ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(offer.productTitle ?? 'Unknown Product', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      Text('Listed: ${currencyFormat.format(offer.productPrice ?? 0)}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
-                  child: Icon(Icons.chat_bubble_outline, size: 16, color: Colors.blue.shade700),
-                ),
-              ],
-            ),
+                child: Icon(Icons.chat_bubble_outline, size: 16, color: Colors.blue.shade700),
+              ),
+            ],
           ),
-          
-          // Buyer Info & Amount
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundColor: Colors.grey[200],
-                      child: Text(offer.buyerName?[0].toUpperCase() ?? 'B', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.red)),
+        ),
+        
+        // Buyer Info & Amount
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Colors.grey[200],
+                    child: Text(
+                      offer.getCorrectActor()['name'][0].toUpperCase(),
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.red),
                     ),
-                    const SizedBox(width: 10),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          offer.getCorrectActor()['name'],
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        Text(
+                          offer.getCorrectActor()['role'] == 'seller' ? 'Seller' : 'Buyer',
+                          style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(offer.status).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: _getStatusColor(offer.status).withOpacity(0.5)),
+                    ),
+                    child: Text(
+                      offer.status.toUpperCase(),
+                      style: TextStyle(
+                        color: _getStatusColor(offer.status),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Offer Amount', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                  Text(
+                    currencyFormat.format(offer.price),
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black),
+                  ),
+                ],
+              ),
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.touch_app, size: 14, color: Colors.grey[600]),
+                    const SizedBox(width: 8),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(offer.buyerName ?? 'Buyer', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                          Text('Buyer', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-                        ],
+                      child: Text(
+                        'Tap to view conversation',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _getStatusColor(offer.status).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: _getStatusColor(offer.status).withOpacity(0.5)),
-                      ),
-                      child: Text(offer.status.toUpperCase(), style: TextStyle(color: _getStatusColor(offer.status), fontWeight: FontWeight.bold, fontSize: 11)),
-                    ),
+                    Icon(Icons.arrow_forward, size: 14, color: Colors.grey[400]),
                   ],
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Offer Amount', style: TextStyle(fontSize: 13, color: Colors.grey)),
-                    Text(currencyFormat.format(offer.price), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.red)),
-                  ],
-                ),
-                Container(
-                  margin: const EdgeInsets.only(top: 12),
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                  decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
-                  child: Row(
-                    children: [
-                      Icon(Icons.touch_app, size: 14, color: Colors.grey[600]),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text('Tap to view conversation', style: TextStyle(fontSize: 12, color: Colors.grey[600]))),
-                      Icon(Icons.arrow_forward, size: 14, color: Colors.grey[400]),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   Color _getStatusColor(String status) {
     switch (status) {
@@ -412,6 +487,74 @@ class _OfferConversationScreenState extends State<OfferConversationScreen> {
       _showError('Error rejecting offer: $e');
     }
   }
+
+Future<void> _handleBuyNow(Offer offer) async {
+  try {
+    // Get the CartProvider
+    final cartProvider = Provider.of<CartProvider>(context, listen: false);
+    
+    // Create a CartItem from the accepted offer
+    final cartItem = CartItem(
+      productId: offer.productId,
+      sellerId: offer.sellerId,
+      title: offer.productTitle ?? 'Product',
+      image: offer.productImage ?? '',
+      price: 'Rs. ${offer.price.toStringAsFixed(0)}',
+      quantity: 1,
+    );
+    
+    // Add to cart
+    cartProvider.addToCart(cartItem);
+    
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Added to cart!'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 1),
+      ),
+    );
+    
+    // Navigate to cart screen
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const CartScreen(),
+      ),
+    );
+  } catch (e) {
+    _showError('Error adding to cart: $e');
+  }
+}
+
+Future<void> _showCancelConfirmation(Offer offer) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Cancel Accepted Offer?'),
+      content: Text(
+        'Are you sure you want to cancel this accepted offer for ${_formatCurrency(offer.price)}?\n\n'
+        'This action cannot be undone.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('No, Keep'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+          child: const Text('Yes, Cancel'),
+        ),
+      ],
+    ),
+  );
+  
+  if (confirmed == true) {
+    await _handleRejectOffer(offer);
+  }
+}
+
 
   void _showCounterDialog(Offer offer) {
     Navigator.pop(context); // Close action dialog
@@ -547,7 +690,7 @@ class _OfferConversationScreenState extends State<OfferConversationScreen> {
               ListTile(
                 leading: Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: Colors.red.shade50, shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                   child: const Icon(Icons.close, color: Colors.red),
                 ),
                 title: const Text('Reject Offer'),
@@ -631,10 +774,43 @@ class _OfferConversationScreenState extends State<OfferConversationScreen> {
     );
   }
 
-  Widget _buildProductSummary() {
-    final currencyFormat = NumberFormat.currency(symbol: 'Rs. ', decimalDigits: 0);
-    
-    return Container(
+ Widget _buildProductSummary() {
+  final currencyFormat = NumberFormat.currency(symbol: 'Rs. ', decimalDigits: 0);
+  
+  return GestureDetector(
+    onTap: () async {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+      
+      try {
+        // Fetch all products and find the one matching this offer
+        final products = await ProductCache.getProducts(limit: 100);
+        final product = products.firstWhere(
+          (p) => p.id == widget.offer.productId,
+          orElse: () => throw Exception('Product not found'),
+        );
+        
+        if (mounted) Navigator.pop(context); // Close loading dialog
+        
+        // Navigate to product detail
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductDetailScreen.fromProduct(product: product),
+          ),
+        );
+      } catch (e) {
+        if (mounted) Navigator.pop(context); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading product: $e'), backgroundColor: Colors.red),
+        );
+      }
+    },
+    child: Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -676,13 +852,108 @@ class _OfferConversationScreenState extends State<OfferConversationScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
- Widget _buildBottomActionButtons() {
+Widget _buildBottomActionButtons() {
   if (_conversationOffers.isEmpty) return const SizedBox.shrink();
   
   final latestOffer = _conversationOffers.last;
+  
+  // ============ FOR ACCEPTED OFFERS - SHOW BUY BUTTON ============
+  if (latestOffer.status == 'accepted') {
+    final bool isSeller = widget.currentUserId == widget.offer.sellerId;
+    final bool isBuyer = widget.currentUserId == widget.offer.buyerId;
+    
+    // Only buyer can buy, only seller can reject/cancel
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Offer Accepted!',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Final Price: ${_formatCurrency(latestOffer.price)}',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          if (isBuyer)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _handleBuyNow(latestOffer),
+                icon: const Icon(Icons.shopping_cart, size: 20),
+                label: const Text(
+                  'View Cart',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          
+          if (isSeller)
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _showCancelConfirmation(latestOffer),
+                icon: const Icon(Icons.cancel, size: 20),
+                label: const Text(
+                  'Cancel Accepted Offer',
+                  style: TextStyle(fontSize: 16),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  side: const BorderSide(color: Colors.red),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+  
+  // ============ FOR PENDING OFFERS - SHOW ACCEPT/REJECT/COUNTER ============
   if (latestOffer.status != 'pending') return const SizedBox.shrink();
   
   final bool isSeller = widget.currentUserId == widget.offer.sellerId;
@@ -692,7 +963,6 @@ class _OfferConversationScreenState extends State<OfferConversationScreen> {
       (isSeller && latestOffer.actorId == widget.offer.buyerId) ||
       (isBuyer && latestOffer.actorId == widget.offer.sellerId);
   
-  // Only sellers can counter
   final bool canCounter = isSeller;
   
   if (!shouldTakeAction) return const SizedBox.shrink();
@@ -715,7 +985,6 @@ class _OfferConversationScreenState extends State<OfferConversationScreen> {
             Expanded(child: OutlinedButton.icon(onPressed: () => _handleRejectOffer(latestOffer), icon: const Icon(Icons.close), label: const Text('Reject'))),
             const SizedBox(width: 8),
             Expanded(child: ElevatedButton.icon(onPressed: () => _handleAcceptOffer(latestOffer), icon: const Icon(Icons.check), label: const Text('Accept'))),
-            // Counter button ONLY for sellers
             if (canCounter) ...[
               const SizedBox(width: 8),
               Expanded(child: OutlinedButton.icon(onPressed: () => _showCounterDialog(latestOffer), icon: const Icon(Icons.swap_horiz), label: const Text('Counter'))),
@@ -745,15 +1014,9 @@ class _OfferConversationScreenState extends State<OfferConversationScreen> {
     final bool isBuyer = offer.actorId == widget.offer.buyerId;
     final currencyFormat = NumberFormat.currency(symbol: 'Rs. ', decimalDigits: 0);
     
-    // Determine the correct actor name
-    String actorName = '';
-    if (isSeller) {
-      actorName = 'Seller';
-    } else if (isBuyer) {
-      actorName = 'Buyer';
-    } else {
-      actorName = 'Unknown';
-    }
+   // Determine the correct actor name using the offer's method
+String actorName = offer.getCorrectActor()['name'];
+String actorRole = offer.getCorrectActor()['role'] == 'seller' ? 'Seller' : 'Buyer';
     
     // Determine if this is a counter offer
     final bool isCounter = offer.parentId != null;
@@ -783,36 +1046,39 @@ class _OfferConversationScreenState extends State<OfferConversationScreen> {
           mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (!isMe) ...[
-              // Avatar with unread indicator
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: isSeller ? Colors.green.shade100 : Colors.orange.shade100,
-                    child: Icon(
-                      isSeller ? Icons.store_outlined : Icons.person_outline,
-                      size: 14,
-                      color: isSeller ? Colors.green.shade800 : Colors.orange.shade800,
-                    ),
-                  ),
-                  if (isUnread)
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Colors.green,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(width: 8),
-            ],
+          if (!isMe) ...[
+  // Avatar with profile picture
+  Stack(
+    children: [
+      CircleAvatar(
+        radius: 16,
+        backgroundImage: _getProfileImage(offer, isSeller, isBuyer),
+        backgroundColor: Colors.grey[200],
+        child: _getProfileImage(offer, isSeller, isBuyer) == null
+            ? Icon(
+                isSeller ? Icons.store_outlined : Icons.person_outline,
+                size: 14,
+                color: isSeller ? Colors.green.shade800 : Colors.orange.shade800,
+              )
+            : null,
+      ),
+      if (isUnread)
+        Positioned(
+          top: 0,
+          right: 0,
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: Colors.green,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+    ],
+  ),
+  const SizedBox(width: 8),
+],
             Flexible(
               child: Container(
                 padding: const EdgeInsets.all(12),
@@ -906,30 +1172,43 @@ class _OfferConversationScreenState extends State<OfferConversationScreen> {
                     ),
                     const SizedBox(height: 8),
                     
-                    // Price
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          currencyFormat.format(offer.price),
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: isMe ? Colors.white : Colors.black87,
-                          ),
-                        ),
-                        if (offer.status == 'pending' && canActOnThis && !isMe)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8),
-                            child: Icon(
-                              Icons.info_outline,
-                              size: 14,
-                              color: Colors.blue.shade400,
-                            ),
-                          ),
-                      ],
-                    ),
                     
+                    // Price
+Row(
+  mainAxisSize: MainAxisSize.min,
+  children: [
+    Text(
+      currencyFormat.format(offer.price),
+      style: TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.bold,
+        color: isMe ? Colors.white : Colors.black87,
+      ),
+    ),
+    if (offer.status == 'pending' && canActOnThis && !isMe)
+      Padding(
+        padding: const EdgeInsets.only(left: 8),
+        child: Icon(
+          Icons.info_outline,
+          size: 14,
+          color: Colors.blue.shade400,
+        ),
+      ),
+  ],
+),
+
+// ✅ ADD THIS NEW SECTION - Show the action description
+const SizedBox(height: 4),
+Text(
+  offer.getCorrectLastActionDescription(),
+  style: TextStyle(
+    fontSize: 11,
+    color: isMe ? Colors.white70 : Colors.grey[600],
+    fontStyle: FontStyle.italic,
+  ),
+),
+
+
                     // Message
                     if (offer.message != null && offer.message!.isNotEmpty) ...[
                       const SizedBox(height: 8),
@@ -1007,36 +1286,38 @@ class _OfferConversationScreenState extends State<OfferConversationScreen> {
                 ),
               ),
             ),
-            if (isMe) ...[
-              const SizedBox(width: 8),
-              // Avatar with unread indicator for your own messages
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: Colors.blue.shade100,
-                    child: Icon(
-                      widget.currentUserId == widget.offer.sellerId ? Icons.store_outlined : Icons.person,
-                      size: 14,
-                      color: Colors.blue.shade800,
-                    ),
-                  ),
-                  if (isUnread)
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Colors.green,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
+           if (isMe) ...[
+  const SizedBox(width: 8),
+  Stack(
+    children: [
+      CircleAvatar(
+        radius: 16,
+        backgroundImage: _getMyProfileImage(offer),
+        backgroundColor: Colors.blue.shade100,
+        child: _getMyProfileImage(offer) == null
+            ? Icon(
+                widget.currentUserId == widget.offer.sellerId ? Icons.store_outlined : Icons.person,
+                size: 14,
+                color: Colors.blue.shade800,
+              )
+            : null,
+      ),
+      if (isUnread)
+        Positioned(
+          top: 0,
+          right: 0,
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: Colors.green,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+    ],
+  ),
+],
           ],
         ),
       ),
@@ -1063,6 +1344,38 @@ class _OfferConversationScreenState extends State<OfferConversationScreen> {
     if (difference.inMinutes > 0) return '${difference.inMinutes}m ago';
     return 'Just now';
   }
-}
 
+  
+  // ==================== PROFILE PICTURE HELPER METHODS ====================
+  
+  ImageProvider? _getProfileImage(Offer offer, bool isSeller, bool isBuyer) {
+    // Check for profile picture from the offer data
+    if (isSeller && offer.sellerProfilePic != null && offer.sellerProfilePic!.isNotEmpty) {
+      return NetworkImage(offer.sellerProfilePic!);
+    }
+    if (isBuyer && offer.buyerProfilePic != null && offer.buyerProfilePic!.isNotEmpty) {
+      return NetworkImage(offer.buyerProfilePic!);
+    }
+    if (offer.actorProfilePic != null && offer.actorProfilePic!.isNotEmpty) {
+      return NetworkImage(offer.actorProfilePic!);
+    }
+    return null;
+  }
+
+  ImageProvider? _getMyProfileImage(Offer offer) {
+    // If current user is the seller, use seller's profile picture
+    if (widget.currentUserId == offer.sellerId) {
+      if (offer.sellerProfilePic != null && offer.sellerProfilePic!.isNotEmpty) {
+        return NetworkImage(offer.sellerProfilePic!);
+      }
+    }
+    // If current user is the buyer, use buyer's profile picture
+    if (widget.currentUserId == offer.buyerId) {
+      if (offer.buyerProfilePic != null && offer.buyerProfilePic!.isNotEmpty) {
+        return NetworkImage(offer.buyerProfilePic!);
+      }
+    }
+    return null;
+  }
+}
 

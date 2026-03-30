@@ -125,14 +125,12 @@ static Future<void> testMinimalRequest() async {
   }
 }
   
-  static Future<List<Product>> fetchProducts({
-     
+ static Future<List<Product>> fetchProducts({
   int page = 1,
-  int limit = 12, // Default to 12 items (you can change this)
+  int limit = 12,
   String? category,
-
 }) async {
-   print('========== API SERVICE DEBUG ==========');
+  print('========== API SERVICE DEBUG ==========');
   print('fetchProducts() called');
   print('baseUrl = $baseUrl');
   print('Platform.isAndroid = ${Platform.isAndroid}');
@@ -174,13 +172,21 @@ static Future<void> testMinimalRequest() async {
         List<Product> products = [];
         for (var json in productsJson) {
           try {
-            products.add(Product.fromJson(json));
+            final product = Product.fromJson(json);
+            
+            // ✅ ADD THIS FILTER - Only add if NOT sold AND has stock
+            if (!product.sold && product.quantityLeft > 0) {
+              products.add(product);
+              print('✅ Added product: ${product.title} (Stock: ${product.quantityLeft})');
+            } else {
+              print('❌ Skipped sold product: ${product.title} (Sold: ${product.sold}, Stock: ${product.quantityLeft})');
+            }
           } catch (e) {
             print('⚠️ Error parsing product: $e');
           }
         }
         
-        print('✅ Successfully parsed ${products.length} products');
+        print('✅ Successfully parsed ${products.length} available products (${productsJson.length - products.length} sold/out-of-stock filtered)');
         return products;
       } else {
         print('❌ Unexpected response structure');

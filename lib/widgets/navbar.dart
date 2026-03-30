@@ -18,6 +18,7 @@ import '../screens/sold_items_screen.dart';
 import '../screens/received_offers_screen.dart';
 import '../services/offer_service.dart';
 import '../models/offer.dart';
+import '../screens/bank_account_screen.dart';
 
 class CustomNavbar extends StatefulWidget implements PreferredSizeWidget {
   const CustomNavbar({super.key});
@@ -304,6 +305,16 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
     super.dispose();
   }
 
+
+void _navigateToPayoutSettings(BuildContext context) {
+  Navigator.pop(context);
+  Navigator.push(
+    context,
+    MaterialPageRoute(builder: (context) => const BankAccountScreen()),
+  ).then((_) {
+    _loadUserData();
+  });
+}
   Future<void> _loadUserData() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('auth_token');
@@ -663,35 +674,42 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
                                       
                   const Divider(height: 24, thickness: 1),
                   
-                  _buildSectionTitle('ACCOUNT'),
-                  if (_isLoggedIn) ...[
-                    _buildDrawerItem(
-                      icon: Icons.person_outline,
-                      title: 'Profile',
-                      onTap: () => _navigateToProfile(context),
-                    ),
-                    _buildDrawerItem(
-                      icon: Icons.favorite_outline,
-                      title: 'Favorites',
-                      onTap: () => _navigateToFavorites(context),
-                    ),
-                    _buildDrawerItem(
-                      icon: Icons.shopping_cart_outlined,
-                      title: 'Cart',
-                      onTap: () => _navigateToCart(context),
-                    ),
-                  ] else ...[
-                    _buildDrawerItem(
-                      icon: Icons.login_outlined,
-                      title: 'Login',
-                      onTap: () => _navigateToLogin(context),
-                    ),
-                    _buildDrawerItem(
-                      icon: Icons.person_add_outlined,
-                      title: 'Sign Up',
-                      onTap: () => _navigateToSignup(context),
-                    ),
-                  ],
+                 _buildSectionTitle('ACCOUNT'),
+if (_isLoggedIn) ...[
+  _buildDrawerItem(
+    icon: Icons.person_outline,
+    title: 'Profile',
+    onTap: () => _navigateToProfile(context),
+  ),
+  _buildDrawerItem(
+    icon: Icons.favorite_outline,
+    title: 'Favorites',
+    onTap: () => _navigateToFavorites(context),
+  ),
+  _buildDrawerItem(
+    icon: Icons.shopping_cart_outlined,
+    title: 'Cart',
+    onTap: () => _navigateToCart(context),
+  ),
+  // ✅ ADD THIS NEW MENU ITEM - Payout Settings
+  _buildDrawerItem(
+    icon: Icons.account_balance_wallet_outlined,
+    title: 'Payout Settings',
+    onTap: () => _navigateToPayoutSettings(context),
+    iconColor: Colors.green,
+  ),
+] else ...[
+  _buildDrawerItem(
+    icon: Icons.login_outlined,
+    title: 'Login',
+    onTap: () => _navigateToLogin(context),
+  ),
+  _buildDrawerItem(
+    icon: Icons.person_add_outlined,
+    title: 'Sign Up',
+    onTap: () => _navigateToSignup(context),
+  ),
+],
                   
                   const Divider(height: 24, thickness: 1),
                   
