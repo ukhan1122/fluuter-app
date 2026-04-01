@@ -18,14 +18,13 @@ class AuthService {
       print('🔐 REAL Login attempt for: $login');
       
       final response = await ApiService.loginUser(
-        login: login,      // Changed from email to login
+        login: login,
         password: password,
       );
 
       if (response['success'] == true && response['data'] != null) {
         final data = response['data'];
         
-        // Extract token from response
         _token = data['token'] ?? 
                 data['access_token'] ?? 
                 data['access'];
@@ -33,10 +32,8 @@ class AuthService {
         if (_token != null) {
           print('✅ Token received: ${_token!.substring(0, 20)}...');
           
-          // Save token
           await _saveTokenToPrefs(_token!);
           
-          // Extract user data from response
           if (data['user'] != null) {
             _userData = data['user'];
             await _saveUserDataToPrefs(_userData!);
@@ -52,13 +49,112 @@ class AuthService {
         }
       }
       
-      // If we reach here, login failed
       final errorMsg = response['error'] ?? 'Login failed - no token received';
       print('❌ Login failed: $errorMsg');
       return {'success': false, 'error': errorMsg};
       
     } catch (e) {
       print('❌ Login exception: $e');
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+
+  // ✅ ADD THIS METHOD - Forgot Password
+  Future<Map<String, dynamic>> forgotPassword(String email) async {
+    try {
+      print('🔐 Forgot password request for: $email');
+      
+      final response = await ApiService.forgotPassword(email: email);
+      
+      if (response['success'] == true) {
+        return {
+          'success': true,
+          'message': 'Password reset link sent to your email'
+        };
+      }
+      
+      return {
+        'success': false,
+        'error': response['error'] ?? 'Failed to send reset link'
+      };
+    } catch (e) {
+      print('❌ Forgot password error: $e');
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+  
+  // ✅ ADD THIS METHOD - Set New Password
+  Future<Map<String, dynamic>> setNewPassword(String token, String newPassword, String confirmPassword) async {
+    try {
+      print('🔐 Setting new password');
+      
+      final response = await ApiService.setNewPassword(
+        token: token,
+        newPassword: newPassword,
+        confirmPassword: confirmPassword,
+      );
+      
+      if (response['success'] == true) {
+        return {
+          'success': true,
+          'message': 'Password updated successfully'
+        };
+      }
+      
+      return {
+        'success': false,
+        'error': response['error'] ?? 'Failed to update password'
+      };
+    } catch (e) {
+      print('❌ Set new password error: $e');
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+  
+  // ✅ ADD THIS METHOD - Verify OTP
+  Future<Map<String, dynamic>> verifyOTP(String phone, String otp) async {
+    try {
+      print('🔐 Verifying OTP for: $phone');
+      
+      final response = await ApiService.verifyOTP(
+        phone: phone,
+        otp: otp,
+      );
+      
+      if (response['success'] == true) {
+        final data = response['data'];
+        
+        // Store token if returned
+        if (data != null) {
+          final token = data['token'] ?? data['access_token'];
+          if (token != null) {
+            _token = token;
+            await _saveTokenToPrefs(token);
+            
+            if (data['user'] != null) {
+              _userData = data['user'];
+              await _saveUserDataToPrefs(_userData!);
+            }
+          }
+        }
+        
+        // Clear pending phone
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('pending_phone');
+        
+        return {
+          'success': true,
+          'data': data,
+          'message': 'Phone verified successfully'
+        };
+      }
+      
+      return {
+        'success': false,
+        'error': response['error'] ?? 'Invalid OTP code'
+      };
+    } catch (e) {
+      print('❌ Verify OTP error: $e');
       return {'success': false, 'error': 'Connection error: $e'};
     }
   }
@@ -129,15 +225,13 @@ class AuthService {
     }
   }
 
-
-    Future<Map<String, dynamic>> sendVerificationCode(String phone) async {
+  Future<Map<String, dynamic>> sendVerificationCode(String phone) async {
     try {
       print('📱 REAL Send verification code to: $phone');
       
       final response = await ApiService.sendVerificationCode(phone: phone);
       
       if (response['success'] == true) {
-        // Save phone for OTP verification
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('pending_phone', phone);
         

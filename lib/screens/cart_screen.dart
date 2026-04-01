@@ -18,102 +18,102 @@ class _CartScreenState extends State<CartScreen> {
   double get totalPrice => cartItems.fold(0, (sum, item) => sum + item.totalPrice);
   int get totalQuantity => cartItems.fold(0, (sum, item) => sum + item.quantity);
 
-  Widget _buildCartItem(CartItem item, int index) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: Colors.grey.shade200),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              color: Colors.grey[200],
-            ),
-            child: item.image.startsWith('http')
-                ? Image.network(
-                    item.image,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(Icons.broken_image, color: Colors.grey);
-                    },
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Center(
-                        child: CircularProgressIndicator(
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                              : null,
-                        ),
-                      );
-                    },
-                  )
-                : Image.asset(
-                    item.image,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(Icons.broken_image, color: Colors.grey);
-                    },
-                  ),
+Widget _buildCartItem(CartItem item, int index) {
+  return Container(
+    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      border: Border.all(color: Colors.grey.shade200),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: Colors.grey[200],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        item.title,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          child: item.image.startsWith('http')
+              ? Image.network(
+                  item.image,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(Icons.broken_image, color: Colors.grey);
+                  },
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
+                            : null,
                       ),
-                    ),
-                    GestureDetector(
-                      onTap: () => Provider.of<CartProvider>(context, listen: false).removeFromCart(index),
-                      child: Icon(Icons.close, size: 18, color: Colors.grey.shade500),
-                    ),
-                  ],
+                    );
+                  },
+                )
+              : Image.asset(
+                  item.image,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(Icons.broken_image, color: Colors.grey);
+                  },
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Rs.${item.price}',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.redAccent,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      item.title,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    ),
                   ),
+                  GestureDetector(
+                    onTap: () => Provider.of<CartProvider>(context, listen: false).removeFromCart(index),
+                    child: Icon(Icons.close, size: 18, color: Colors.grey.shade500),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${item.price}',
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.redAccent,
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    // REMOVED: Increment/Decrement buttons
-                    // Quantity is now fixed at 1
-                    const Text(
-                      'Quantity: 1',
-                      style: TextStyle(fontSize: 14, color: Colors.grey),
-                    ),
-                    const Spacer(),
-                    Text(
-                      'Rs.${(double.parse(item.price.replaceAll('Rs.', '')) * 1).toStringAsFixed(0)}',
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  // ✅ SHOW ACTUAL QUANTITY FROM CART ITEM
+                  Text(
+                    'Quantity: ${item.quantity}',
+                    style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                  const Spacer(),
+                  // ✅ CALCULATE TOTAL PRICE BASED ON ACTUAL QUANTITY
+                  Text(
+                    'Rs.${(double.parse(item.price.replaceAll('Rs.', '')) * item.quantity).toStringAsFixed(0)}',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildEmptyCart() => Center(
     child: Column(

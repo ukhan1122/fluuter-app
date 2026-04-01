@@ -1788,7 +1788,6 @@ Future<void> _editProduct(Product product) async {
     );
   }
 
-// Add this method to show edit product popup
 Future<void> _showEditProductPopup(Product product) async {
   // Find the UPDATED product from sellingItems list
   Product currentProduct = sellingItems.firstWhere(
@@ -1802,11 +1801,11 @@ Future<void> _showEditProductPopup(Product product) async {
   TextEditingController priceController = TextEditingController(text: currentProduct.price.toString());
   TextEditingController quantityController = TextEditingController(text: currentProduct.quantityLeft.toString());
   
-  // Lists for images only
+  // Lists for images
   List<File> newImages = [];
   List<String> existingImages = List.from(currentProduct.photoUrls);
+  List<int> imagesToDelete = [];
   
-  bool isLoading = false;
   bool isSaving = false;
 
   showModalBottomSheet(
@@ -1864,179 +1863,210 @@ Future<void> _showEditProductPopup(Product product) async {
               
               // Content
               Expanded(
-                child: isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : SingleChildScrollView(
-                        padding: const EdgeInsets.all(20),
-                        child: Form(
-                          key: GlobalKey<FormState>(),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Images Section
-                              _buildEditImagesSection(
-                                existingImages: existingImages,
-                                newImages: newImages,
-                                onAddImage: () async {
-                                  final ImagePicker picker = ImagePicker();
-                                  final XFile? image = await picker.pickImage(
-                                    source: ImageSource.gallery,
-                                    maxWidth: 800,
-                                    maxHeight: 800,
-                                    imageQuality: 85,
-                                  );
-                                  if (image != null) {
-                                    setState(() {
-                                      newImages.add(File(image.path));
-                                    });
-                                  }
-                                },
-                                onRemoveExisting: (index) {
-                                  setState(() {
-                                    existingImages.removeAt(index);
-                                  });
-                                },
-                                onRemoveNew: (index) {
-                                  setState(() {
-                                    newImages.removeAt(index);
-                                  });
-                                },
-                              ),
-                              const SizedBox(height: 24),
-                              
-                              // Title
-                              _buildEditTextField(
-                                controller: titleController,
-                                label: 'Title',
-                                icon: Icons.title,
-                              ),
-                              const SizedBox(height: 16),
-                              
-                              // Description
-                              _buildEditTextField(
-                                controller: descriptionController,
-                                label: 'Description',
-                                icon: Icons.description,
-                                maxLines: 3,
-                              ),
-                              const SizedBox(height: 16),
-                              
-                              // Price and Quantity Row
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _buildEditTextField(
-                                      controller: priceController,
-                                      label: 'Price (PKR)',
-                                      icon: Icons.attach_money,
-                                      keyboardType: TextInputType.number,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: _buildEditTextField(
-                                      controller: quantityController,
-                                      label: 'Quantity',
-                                      icon: Icons.numbers,
-                                      keyboardType: TextInputType.number,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 32),
-                              
-                              // Save Button - Sends ONLY what backend expects
-                              SizedBox(
-                                width: double.infinity,
-                                height: 55,
-                                child: ElevatedButton(
-                                  onPressed: isSaving ? null : () async {
-                                    setState(() => isSaving = true);
-                                    
-                                    try {
-                                      // Prepare update data - ONLY fields the backend expects
-                                      Map<String, dynamic> updateData = {
-                                        'title': titleController.text.trim(),
-                                        'description': descriptionController.text.trim(),
-                                        'price': double.parse(priceController.text.trim()).toString(),
-                                        'quantity': int.parse(quantityController.text.trim()).toString(),
-                                      };
-                                      
-                                      print('📤 Sending update data: $updateData');
-                                      
-                                      // Update product details
-                                      final updateResult = await AuthProductService.updateProduct(
-                                        productId: product.id.toString(),
-                                        productData: updateData,
-                                      );
-                                      
-                                      if (updateResult['success'] == true) {
-                                        // Upload new images if any
-                                        if (newImages.isNotEmpty) {
-                                          await AuthProductService.updateProductPhotos(
-                                            productId: product.id.toString(),
-                                            images: newImages.map((f) => f.path).toList(),
-                                          );
-                                        }
-                                        
-                                        Navigator.pop(context);
-                                        await _fetchUserProducts(); // Refresh list
-                                        
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('Product updated successfully!'),
-                                              backgroundColor: Colors.green,
-                                            ),
-                                          );
-                                        }
-                                      } else {
-                                        throw Exception(updateResult['error']);
-                                      }
-                                    } catch (e) {
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('Error: ${e.toString()}'),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
-                                      }
-                                    } finally {
-                                      if (mounted) {
-                                        setState(() => isSaving = false);
-                                      }
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(15),
-                                    ),
-                                  ),
-                                  child: isSaving
-                                      ? const SizedBox(
-                                          height: 20,
-                                          width: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white,
-                                          ),
-                                        )
-                                      : const Text(
-                                          'Save Changes',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                ),
-                              ),
-                            ],
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Images Section
+                      _buildEditImagesSection(
+                        existingImages: existingImages,
+                        newImages: newImages,
+                        onAddImage: () async {
+                          final ImagePicker picker = ImagePicker();
+                          final XFile? image = await picker.pickImage(
+                            source: ImageSource.gallery,
+                            maxWidth: 800,
+                            maxHeight: 800,
+                            imageQuality: 85,
+                          );
+                          if (image != null) {
+                            setState(() {
+                              newImages.add(File(image.path));
+                            });
+                          }
+                        },
+                        onRemoveExisting: (index) {
+                          setState(() {
+                            // Add to delete list if we have the image ID
+                            // You'll need to get image IDs from the product data
+                            existingImages.removeAt(index);
+                          });
+                        },
+                        onRemoveNew: (index) {
+                          setState(() {
+                            newImages.removeAt(index);
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      
+                      // Title
+                      _buildEditTextField(
+                        controller: titleController,
+                        label: 'Title',
+                        icon: Icons.title,
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // Description
+                      _buildEditTextField(
+                        controller: descriptionController,
+                        label: 'Description',
+                        icon: Icons.description,
+                        maxLines: 3,
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // Price and Quantity Row
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildEditTextField(
+                              controller: priceController,
+                              label: 'Price (PKR)',
+                              icon: Icons.attach_money,
+                              keyboardType: TextInputType.number,
+                            ),
                           ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildEditTextField(
+                              controller: quantityController,
+                              label: 'Stock Quantity',
+                              icon: Icons.numbers,
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 32),
+                      
+                      // Save Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 55,
+                        child: ElevatedButton(
+                          onPressed: isSaving ? null : () async {
+                            setState(() => isSaving = true);
+                            
+                            try {
+                              // Get auth token
+                              final prefs = await SharedPreferences.getInstance();
+                              final token = prefs.getString('auth_token');
+                              
+                              if (token == null) throw Exception('Not authenticated');
+                              
+                              // ✅ FIX 1: Use PUT method for update
+                              final updateUrl = Uri.parse('${ApiService.baseUrl}/api/v1/listing/auth/products/${product.id}');
+                              
+                              // ✅ FIX 2: Send quantity_left, not quantity
+                              final Map<String, dynamic> updateData = {
+                                'title': titleController.text.trim(),
+                                'description': descriptionController.text.trim(),
+                                'price': double.parse(priceController.text.trim()),
+                                'quantity_left': int.parse(quantityController.text.trim()), // ← KEY FIX
+                              };
+                              
+                              print('📤 Sending PUT to: $updateUrl');
+                              print('📤 Update data: $updateData');
+                              
+                              // ✅ FIX 3: Use PUT request
+                              final updateResponse = await http.put(
+                                updateUrl,
+                                headers: {
+                                  'Accept': 'application/json',
+                                  'Content-Type': 'application/json',
+                                  'Authorization': 'Bearer $token',
+                                },
+                                body: json.encode(updateData),
+                              ).timeout(const Duration(seconds: 15));
+                              
+                              print('📡 Update Status: ${updateResponse.statusCode}');
+                              print('📡 Update Response: ${updateResponse.body}');
+                              
+                              if (updateResponse.statusCode == 200) {
+                                // Update images if any
+                                if (newImages.isNotEmpty) {
+                                  // Use multipart for images
+                                  var request = http.MultipartRequest(
+                                    'POST',
+                                    Uri.parse('${ApiService.baseUrl}/api/v1/listing/auth/products/${product.id}/photos'),
+                                  );
+                                  
+                                  request.headers['Authorization'] = 'Bearer $token';
+                                  
+                                  for (int i = 0; i < newImages.length; i++) {
+                                    var multipartFile = await http.MultipartFile.fromPath(
+                                      'photos[]',
+                                      newImages[i].path,
+                                    );
+                                    request.files.add(multipartFile);
+                                  }
+                                  
+                                  var streamedResponse = await request.send();
+                                  var photoResponse = await http.Response.fromStream(streamedResponse);
+                                  
+                                  print('📡 Photo Update Status: ${photoResponse.statusCode}');
+                                  print('📡 Photo Response: ${photoResponse.body}');
+                                }
+                                
+                                Navigator.pop(context);
+                                await _fetchUserProducts(); // Refresh list
+                                
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Product updated successfully!'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              } else {
+                                throw Exception('Update failed: ${updateResponse.body}');
+                              }
+                            } catch (e) {
+                              print('❌ Update error: $e');
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Error: ${e.toString()}'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            } finally {
+                              if (mounted) setState(() => isSaving = false);
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                          ),
+                          child: isSaving
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'Save Changes',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                         ),
                       ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),

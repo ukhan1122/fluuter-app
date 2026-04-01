@@ -694,7 +694,7 @@ if (_isLoggedIn) ...[
   // ✅ ADD THIS NEW MENU ITEM - Payout Settings
   _buildDrawerItem(
     icon: Icons.account_balance_wallet_outlined,
-    title: 'Payout Settings',
+    title: 'Wallet',
     onTap: () => _navigateToPayoutSettings(context),
     iconColor: Colors.green,
   ),

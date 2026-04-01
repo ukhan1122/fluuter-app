@@ -1516,4 +1516,96 @@ static Future<List<Product>> getSellerProducts(String sellerId) async {
   }
 }
 
+
+// Add these methods to your ApiService class
+
+static Future<Map<String, dynamic>> forgotPassword({required String email}) async {
+  try {
+    print('📧 Forgot password API call for: $email');
+    
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/auth/forgot-password'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email}),
+    );
+    
+    print('📡 Forgot password response status: ${response.statusCode}');
+    
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return {'success': true, 'data': data};
+    } else {
+      final error = jsonDecode(response.body);
+      return {'success': false, 'error': error['message'] ?? 'Failed to send reset link'};
+    }
+  } catch (e) {
+    print('❌ Forgot password API error: $e');
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+static Future<Map<String, dynamic>> setNewPassword({
+  required String token,
+  required String newPassword,
+  required String confirmPassword,
+}) async {
+  try {
+    print('🔐 Set new password API call');
+    
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/auth/set-new-password'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'token': token,
+        'new_password': newPassword,
+        'confirm_password': confirmPassword,
+      }),
+    );
+    
+    print('📡 Set new password response status: ${response.statusCode}');
+    
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return {'success': true, 'data': data};
+    } else {
+      final error = jsonDecode(response.body);
+      return {'success': false, 'error': error['message'] ?? 'Failed to set new password'};
+    }
+  } catch (e) {
+    print('❌ Set new password API error: $e');
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+static Future<Map<String, dynamic>> verifyOTP({
+  required String phone,
+  required String otp,
+}) async {
+  try {
+    print('📱 Verify OTP API call for: $phone');
+    
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/auth/verify-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'phone': phone,
+        'otp': otp,
+      }),
+    );
+    
+    print('📡 Verify OTP response status: ${response.statusCode}');
+    
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final data = jsonDecode(response.body);
+      return {'success': true, 'data': data};
+    } else {
+      final error = jsonDecode(response.body);
+      return {'success': false, 'error': error['message'] ?? 'Invalid OTP'};
+    }
+  } catch (e) {
+    print('❌ Verify OTP API error: $e');
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
 }

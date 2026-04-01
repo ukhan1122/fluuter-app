@@ -1797,14 +1797,36 @@ Future<Map<String, dynamic>> _makeOffer({
     ),
     child: Consumer<CartProvider>(
       builder: (context, cartProvider, child) {
+        // ✅ CHECK HOW MANY OF THIS PRODUCT ARE ALREADY IN CART
+        final int quantityInCart = cartProvider.cartItems
+            .where((item) => item.productId == widget.product.id)
+            .fold(0, (sum, item) => sum + item.quantity);
+        
+        // ✅ CALCULATE REMAINING QUANTITY AVAILABLE
+        final int remainingQuantity = widget.product.quantityLeft - quantityInCart;
+        
+        // ✅ DETERMINE IF BUTTON SHOULD BE DISABLED
+        final bool isButtonDisabled = isOutOfStock || remainingQuantity <= 0;
+        
+        // ✅ BUTTON TEXT
+        String buttonText = '';
+        if (isOutOfStock) {
+          buttonText = 'Out of Stock';
+        } else if (remainingQuantity <= 0) {
+          buttonText = 'Max Quantity Added';
+        } else {
+          buttonText = 'Add to Bag';
+        }
+        
         return Column(
           children: [
             ElevatedButton(
-              onPressed: isOutOfStock 
-                  ? null  // Disable button if out of stock
+              onPressed: isButtonDisabled 
+                  ? null
                   : () {
                       final images = _imageUrls;
                       
+                      // ✅ ONLY ADD ONE AT A TIME
                       cartProvider.addToCart(CartItem(
                         productId: widget.product.id,
                         sellerId: widget.product.userId,
@@ -1814,6 +1836,7 @@ Future<Map<String, dynamic>> _makeOffer({
                         quantity: 1,
                       ));
                       
+                      // ✅ SHOW MESSAGE WITH REMAINING QUANTITY
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Container(
@@ -1823,12 +1846,26 @@ Future<Map<String, dynamic>> _makeOffer({
                                 const Icon(Icons.check_circle, color: Colors.green, size: 20),
                                 const SizedBox(width: 12),
                                 Expanded(
-                                  child: Text(
-                                    'Added to cart',
-                                    style: TextStyle(
-                                      color: Colors.grey[800],
-                                      fontSize: 14,
-                                    ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'Added to cart',
+                                        style: TextStyle(
+                                          color: Colors.grey[800],
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      if (remainingQuantity - 1 > 0)
+                                        Text(
+                                          '${remainingQuantity - 1} left in stock',
+                                          style: TextStyle(
+                                            color: Colors.grey[600],
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 ),
                                 TextButton(
@@ -1868,7 +1905,7 @@ Future<Map<String, dynamic>> _makeOffer({
                       );
                     },
               style: ElevatedButton.styleFrom(
-                backgroundColor: isOutOfStock ? Colors.grey : Colors.red,
+                backgroundColor: isButtonDisabled ? Colors.grey : Colors.red,
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 50),
                 shape: RoundedRectangleBorder(
@@ -1877,7 +1914,7 @@ Future<Map<String, dynamic>> _makeOffer({
                 elevation: 0,
               ),
               child: Text(
-                isOutOfStock ? 'Out of Stock' : 'Add to Bag',
+                buttonText,
                 style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 16,
