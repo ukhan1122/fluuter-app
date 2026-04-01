@@ -6,7 +6,7 @@ import 'screens/home_screen.dart';
 import 'providers/user_provider.dart';
 import 'providers/cart_provider.dart';
 import 'services/api_service.dart';
-import 'screens/profile_screen.dart';
+import 'screens/profile/profile_screen.dart';
 import 'screens/seller_profile_screen.dart';
 import 'providers/follow_provider.dart';
 import 'services/search_service.dart';
@@ -14,6 +14,8 @@ import 'providers/favorites_provider.dart';
 import 'screens/forgot_password_screen.dart';
 import 'screens/set_new_password_screen.dart';
 import 'screens/verify_otp_screen.dart';
+
+import 'screens/profile/providers/profile_provider.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,6 +51,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CartProvider()), 
         ChangeNotifierProvider(create: (_) => FollowProvider()),
         ChangeNotifierProvider(create: (_) => FavoritesProvider()),
+    ChangeNotifierProvider( create: (_) => ProfileProvider()),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,

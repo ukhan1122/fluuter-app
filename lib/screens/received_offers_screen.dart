@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/offer.dart';
-import '../services/offer_service.dart';
 import '../widgets/product_detail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/product.dart' as model;
@@ -92,7 +91,7 @@ class _ReceivedOffersScreenState extends State<ReceivedOffersScreen> with Single
   Future<void> _fetchOffers() async {
     setState(() => _isLoading = true);
     try {
-      _offers = await OfferService.getReceivedOffers();
+      _offers = await ApiService.getReceivedOffers();
     } catch (e) {
       print('❌ Error fetching offers: $e');
       if (mounted) {
@@ -437,7 +436,7 @@ class _OfferConversationScreenState extends State<OfferConversationScreen> {
   Future<void> _loadConversation() async {
     setState(() => _isLoading = true);
     try {
-      final offers = await OfferService.getConversation(
+      final offers = await ApiService.getOfferConversation(
         productId: widget.offer.productId,
         buyerId: widget.offer.buyerId,
         sellerId: widget.offer.sellerId,
@@ -455,7 +454,7 @@ class _OfferConversationScreenState extends State<OfferConversationScreen> {
   Future<void> _handleAcceptOffer(Offer offer) async {
     Navigator.pop(context); // Close dialog
     try {
-      final result = await OfferService.acceptOffer(offer.id);
+      final result = await ApiService.acceptOffer(offer.id);
       if (result['success'] == true) {
         widget.onOfferUpdated();
         if (mounted) {
@@ -473,7 +472,7 @@ class _OfferConversationScreenState extends State<OfferConversationScreen> {
   Future<void> _handleRejectOffer(Offer offer) async {
     Navigator.pop(context); // Close dialog
     try {
-      final result = await OfferService.rejectOffer(offer.id);
+      final result = await ApiService.rejectOffer(offer.id);
       if (result['success'] == true) {
         widget.onOfferUpdated();
         if (mounted) {
@@ -607,7 +606,7 @@ Future<void> _showCancelConfirmation(Offer offer) async {
                   setState(() => isSending = true);
 
                   try {
-                    final result = await OfferService.counterOffer(
+                    final result = await ApiService.counterOffer(
                       offerId: offer.id,
                       price: price,
                       message: messageController.text.isNotEmpty ? messageController.text : null,

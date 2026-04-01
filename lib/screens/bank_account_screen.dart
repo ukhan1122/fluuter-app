@@ -1,8 +1,8 @@
 // lib/screens/bank_account_screen.dart
 
 import 'package:flutter/material.dart';
-import '../services/bank_service.dart';
 import '../models/bank_account.dart';
+import '../services/api_service.dart';
 
 class BankAccountScreen extends StatefulWidget {
   const BankAccountScreen({super.key});
@@ -43,7 +43,7 @@ class _BankAccountScreenState extends State<BankAccountScreen> {
   Future<void> _loadBankDetails() async {
     setState(() => _isLoading = true);
     try {
-      final result = await BankService.getBankDetails();
+      final result = await ApiService.getBankDetails();
       if (result['success'] && result['data'] != null) {
         setState(() {
           _existingAccount = BankAccount.fromJson(result['data']);
@@ -62,7 +62,7 @@ class _BankAccountScreenState extends State<BankAccountScreen> {
     setState(() => _isLoading = true);
     
     try {
-      final result = await BankService.createBankDetails(
+      final result = await ApiService.createBankDetails(
         accountHolderName: _accountHolderController.text.trim(),
         bankName: _bankNameController.text.trim(),
         accountNumber: _accountNumberController.text.trim(),

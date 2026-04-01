@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../screens/login.dart';
 import '../screens/signup.dart';
 import '../screens/home_screen.dart';
-import '../screens/profile_screen.dart';
+import '../screens/profile/profile_screen.dart';
 import '../screens/cart_screen.dart'; 
 import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
@@ -16,9 +16,9 @@ import '../screens/overview_screen.dart';
 import '../screens/my_listings_screen.dart';
 import '../screens/sold_items_screen.dart';
 import '../screens/received_offers_screen.dart';
-import '../services/offer_service.dart';
 import '../models/offer.dart';
 import '../screens/bank_account_screen.dart';
+import '../services/api_service.dart';
 
 class CustomNavbar extends StatefulWidget implements PreferredSizeWidget {
   const CustomNavbar({super.key});
@@ -82,7 +82,8 @@ Future<void> _loadUnreadOfferCount() async {
   
   try {
     print('🔄 Fetching unread offer count...');
-    final offers = await OfferService.getReceivedOffers();
+    
+final offers = await ApiService.getReceivedOffers();
     print('📊 Total offers received: ${offers.length}');
     
     final unreadCount = offers.where((offer) => 
@@ -347,7 +348,8 @@ void _navigateToPayoutSettings(BuildContext context) {
     
     try {
       print('🔄 Fetching unread offer count...');
-      final offers = await OfferService.getReceivedOffers();
+final offers = await ApiService.getReceivedOffers();
+
       final unreadCount = offers.where((offer) => 
         offer.status == 'pending'
       ).length;

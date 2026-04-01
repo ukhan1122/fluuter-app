@@ -7,7 +7,7 @@ import 'dart:convert';
 import '../services/search_service.dart';
 import '../screens/search_results_screen.dart';
 import '../screens/login.dart';
-import '../screens/profile_screen.dart';
+import '../screens/profile/profile_screen.dart';
 import '../screens/cart_screen.dart';
 import '../providers/cart_provider.dart';
 import '../screens/favorites_screen.dart'; // Add this import

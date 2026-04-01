@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
-import '../services/order_service.dart';
 import '../models/order.dart';
+import '../services/api_service.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final List<CartItem> cartItems;
@@ -153,31 +153,32 @@ if (mounted) {
                   };
                 }).toList();
                 
-                // Call API to create order
-                final result = await OrderService.createOrder(
-                  customerName: _nameController.text,
-                  phone: _phoneController.text,
-                  email: _emailController.text,
-                  address: _addressController.text,
-                  city: _cityController.text,
-                  subtotal: _subtotal,
-                  deliveryCharge: _deliveryCharge,
-                  total: _total,
-                  paymentMethod: _paymentMethod,
-                  deliveryOption: _deliveryOption,
-                  items: orderItems,
-                );
+final result = await ApiService.createOrder(
+  orderData: {
+    'customer_name': _nameController.text,
+    'phone': _phoneController.text,
+    'email': _emailController.text,
+    'shipping_address': _addressController.text,
+    'city': _cityController.text,
+    'subtotal': _subtotal,  // ← Use _subtotal (the getter)
+    'delivery_charge': _deliveryCharge,  // ← Use _deliveryCharge (the getter)
+    'total': _total,  // ← Use _total (the getter)
+    'payment_method': _paymentMethod,  // ← Use _paymentMethod (state variable)
+    'delivery_option': _deliveryOption,  
+    'cart_items': orderItems, 
+  },
+);
                 
                  if (mounted && loadingDialogContext != null) {
-  Navigator.of(loadingDialogContext!).pop();  // ✅ closes ONLY loading dialog
+  Navigator.of(loadingDialogContext!).pop();  
 }
 
 
                 
-                // Small delay to ensure dialog is closed
+               
                 await Future.delayed(const Duration(milliseconds: 100));
                 
-                // Show result using post frame callback
+             
                 if (mounted) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (!mounted) return;
