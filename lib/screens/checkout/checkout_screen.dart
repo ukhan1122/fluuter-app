@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../models/cart_item.dart';
+import '../../models/order.dart';
+import '../../providers/cart_provider.dart';
+import '../../services/api_service.dart';
 import 'package:provider/provider.dart';
-import '../models/cart_item.dart';
-import '../providers/cart_provider.dart';
-import '../models/order.dart';
-import '../services/api_service.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final List<CartItem> cartItems;
@@ -185,7 +185,7 @@ final result = await ApiService.createOrder(
                     
                     if (result['success'] == true) {
                       // Clear the cart
-                      final cartProvider = Provider.of<CartProvider>(context, listen: false);
+final cartProvider = Provider.of(context, listen: false);
                       cartProvider.clearCart();
                       
                       // Show success dialog

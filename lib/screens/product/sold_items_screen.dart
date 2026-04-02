@@ -1,10 +1,10 @@
 // lib/screens/sold_items_screen.dart
 
 import 'package:flutter/material.dart';
-import '../widgets/navbar.dart';
-import '../services/api_service.dart';
-import '../models/product.dart';
-import '../widgets/product_detail.dart';
+import '../../widgets/navbar.dart';
+import '../../services/api_service.dart';
+import '../../models/product.dart';
+import '../../widgets/product_detail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 
@@ -116,7 +116,7 @@ class _SoldItemsScreenState extends State<SoldItemsScreen> {
           ),
         ],
       ),
-      drawer: const CustomDrawer(),
+      drawer: CustomDrawer(),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(

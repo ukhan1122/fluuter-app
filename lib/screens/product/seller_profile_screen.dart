@@ -2,10 +2,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/api_service.dart';
-import '../providers/follow_provider.dart';
-import '../models/product.dart' as product_model;
-import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
+import '../../services/api_service.dart';
+import '../../providers/follow_provider.dart';
+import '../../models/product.dart' as product_model;
+import '../../models/product.dart';
+import '../../widgets/product_detail.dart';
 
 // Models
 class Seller {

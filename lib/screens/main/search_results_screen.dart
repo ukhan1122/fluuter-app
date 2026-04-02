@@ -1,8 +1,8 @@
-// lib/screens/search_results_screen.dart
+// lib/screens/main/search_results_screen.dart
 
 import 'package:flutter/material.dart';
-import '../models/product.dart';
-import '../widgets/product_detail.dart';
+import '../../models/product.dart';
+import '../../widgets/product_detail.dart';
 
 class SearchResultsScreen extends StatelessWidget {
   final String query;

@@ -1,13 +1,14 @@
 // lib/screens/my_listings_screen.dart
 
 import 'package:flutter/material.dart';
-import '../widgets/navbar.dart';
-import '../services/api_service.dart';
-import '../models/product.dart';
-import '../widgets/product_detail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../screens/create_listing_screen.dart';
-import '../screens/login.dart';
+import '../../services/api_service.dart';
+import '../../models/product.dart';
+import '../../widgets/product_detail.dart';
+import '../../widgets/navbar.dart';
+import 'create_listing_screen.dart';
+import '../auth/login.dart';
+
 
 class MyListingsScreen extends StatefulWidget {
   const MyListingsScreen({super.key});

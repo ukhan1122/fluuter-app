@@ -1,15 +1,15 @@
 // lib/screens/overview_screen.dart
 
 import 'package:flutter/material.dart';
-import '../widgets/navbar.dart';
-import '../services/api_service.dart';
-import '../models/product.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:intl/intl.dart';
-import '../screens/create_listing_screen.dart';
-import '../screens/favorites_screen.dart';
-import '../screens/login.dart';
+import '../../services/api_service.dart';
+import '../../models/product.dart';
+import '../../widgets/navbar.dart';
+import '../product/create_listing_screen.dart';
+import '../product/favorites_screen.dart';
+import '../auth/login.dart';
 
 class OverviewScreen extends StatefulWidget {
   const OverviewScreen({super.key});
@@ -177,7 +177,8 @@ class _OverviewScreenState extends State<OverviewScreen> {
           ),
         ],
       ),
-      drawer: const CustomDrawer(),
+      
+drawer: CustomDrawer(),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -285,7 +286,8 @@ class _OverviewScreenState extends State<OverviewScreen> {
                             icon: Icons.add_circle_outline,
                             label: 'Create Listing',
                             color: Colors.green,
-                            onTap: () => _checkAuthAndNavigate(const CreateListingScreen()), // ← Updated
+                            onTap: () => 
+_checkAuthAndNavigate(CreateListingScreen()), // ← Updated
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -294,7 +296,8 @@ class _OverviewScreenState extends State<OverviewScreen> {
                             icon: Icons.favorite_outline,
                             label: 'Favorites',
                             color: Colors.red,
-                            onTap: () => _checkAuthAndNavigate(const FavoritesScreen()), // ← Updated
+                            onTap: () => 
+_checkAuthAndNavigate(FavoritesScreen())  // ← Updated
                           ),
                         ),
                       ],

@@ -1,9 +1,9 @@
 // lib/screens/bank_account_screen.dart
 
 import 'package:flutter/material.dart';
-import '../models/bank_account.dart';
-import '../services/api_service.dart';
 
+import '../../services/api_service.dart';
+import '../../models/bank_account.dart';
 class BankAccountScreen extends StatefulWidget {
   const BankAccountScreen({super.key});
 

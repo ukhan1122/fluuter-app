@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import '../services/auth_service.dart';
+import '../../services/auth_service.dart';
 
 class VerifyOTPScreen extends StatefulWidget {
   final String phone;

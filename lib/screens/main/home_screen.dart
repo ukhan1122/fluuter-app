@@ -1,11 +1,11 @@
 // lib/screens/home_screen.dart
 
 import 'package:flutter/material.dart';
-import '../widgets/hero_slider.dart';
-import '../widgets/category_tags.dart';
-import '../widgets/product_grid.dart';
-import '../widgets/navbar.dart';
-import '../widgets/global_search_bar.dart'; // Use this
+import '../../widgets/hero_slider.dart';
+import '../../widgets/category_tags.dart';
+import '../../widgets/product_grid.dart';
+import '../../widgets/navbar.dart';
+import '../../widgets/global_search_bar.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -32,8 +32,8 @@ class _HomeScreenState extends State<HomeScreen> {
         : allCategories;
 
     return Scaffold(
-      appBar: const GlobalSearchBar(), // Use your global search bar
-      drawer: const CustomDrawer(),
+      appBar: GlobalSearchBar(),  // Remove 'const'
+drawer: CustomDrawer(),     // Remove 'const'
       body: SingleChildScrollView(
         child: Column(
           children: [

@@ -1,9 +1,9 @@
 // lib/screens/cart_screen.dart
 import 'package:flutter/material.dart';
-import '../models/cart_item.dart';
 import 'checkout_screen.dart'; 
 import 'package:provider/provider.dart';
-import '../providers/cart_provider.dart';
+import '../../models/cart_item.dart';
+import '../../providers/cart_provider.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});

@@ -4,9 +4,9 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../services/api_service.dart';
+import '../../services/api_service.dart';
+import '../../config.dart';
 import 'dart:math';  // Add this for min() function
-import '../config.dart';  // Add this with other imports
 
 
 

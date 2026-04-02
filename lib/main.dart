@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'screens/login.dart';
-import 'screens/signup.dart';
-import 'screens/home_screen.dart';
 import 'providers/user_provider.dart';
 import 'providers/cart_provider.dart';
 import 'services/api_service.dart';
-import 'screens/profile/profile_screen.dart';
-import 'screens/seller_profile_screen.dart';
 import 'providers/follow_provider.dart';
 import 'services/search_service.dart';
 import 'providers/favorites_provider.dart';
-import 'screens/forgot_password_screen.dart';
-import 'screens/set_new_password_screen.dart';
-import 'screens/verify_otp_screen.dart';
-
+import 'screens/main/home_screen.dart';
+import 'screens/auth/login.dart';
+import 'screens/auth/signup.dart';
+import 'screens/auth/verify_otp_screen.dart';
+import 'screens/auth/forgot_password_screen.dart';
+import 'screens/auth/set_new_password_screen.dart';
+import 'screens/profile/profile_screen.dart';
 import 'screens/profile/providers/profile_provider.dart';
+import 'screens/product/seller_profile_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -66,14 +65,15 @@ class MyApp extends StatelessWidget {
         },
         onGenerateRoute: (settings) {
           // Handle seller profile route
-          if (settings.name == '/seller-profile') {
-            final args = settings.arguments as Map?;
-            return MaterialPageRoute(
-              builder: (context) => SellerProfileScreen(
-                sellerId: args?['sellerId'] ?? '',
-              ),
-            );
-          }
+       // Handle seller profile route
+if (settings.name == '/seller-profile') {
+  final args = settings.arguments as Map?;
+  return MaterialPageRoute(
+    builder: (context) => SellerProfileScreen(
+      sellerId: args?['sellerId'] ?? '',
+    ),
+  );
+}
           
           // Handle set-new-password
           if (settings.name == '/set-new-password') {

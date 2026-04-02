@@ -1,91 +1,91 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
-import '../services/auth_service.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+import '../../services/auth_service.dart';
+
+class SignupScreen extends StatefulWidget {
+  const SignupScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  _SignupScreenState createState() => _SignupScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final _signupRecognizer = TapGestureRecognizer();
-  final _forgotPasswordRecognizer = TapGestureRecognizer();
-  final loginController = TextEditingController();
-  final passwordController = TextEditingController();
+class _SignupScreenState extends State<SignupScreen> {
+  final _loginRecognizer = TapGestureRecognizer();
+  final phoneController = TextEditingController();
+  bool isChecked = false;
+  bool isPhoneValid = true;
   bool isButtonEnabled = false;
-  bool isLoginValid = true;
-  bool isPasswordValid = true;
-  String loginErrorText = '';
-  String passwordErrorText = '';
+  String phoneErrorText = '';
   bool _isLoading = false;
-  bool _obscurePassword = true;
 
   @override
   void initState() {
     super.initState();
-    _signupRecognizer.onTap = () => Navigator.pushNamed(context, '/signup');
-    _forgotPasswordRecognizer.onTap = () => Navigator.pushNamed(context, '/forgot-password');
-    loginController.addListener(_validateForm);
-    passwordController.addListener(_validateForm);
+    _loginRecognizer.onTap = () => Navigator.pushNamed(context, '/login');
+    phoneController.addListener(_validateForm);
   }
 
   void _validateForm() {
-    final login = loginController.text.trim();
-    final password = passwordController.text.trim();
+    final phone = phoneController.text.trim();
+    final startsWith03 = phone.startsWith('03');
+    final is11Digits = phone.length == 11;
+    final remainingNumeric = _isNumeric(phone.substring(2));
     
-    final validLogin = login.isNotEmpty && login.length >= 3;
-    final validPassword = password.isNotEmpty && password.length >= 3;
+    isPhoneValid = startsWith03 && is11Digits && remainingNumeric;
     
     setState(() {
-      isLoginValid = validLogin;
-      isPasswordValid = validPassword;
+      if (phone.isNotEmpty && !isPhoneValid) {
+        if (!startsWith03) {
+          phoneErrorText = 'Phone number must start with 03';
+        } else if (!is11Digits) {
+          phoneErrorText = 'Phone number must be 11 digits';
+        } else {
+          phoneErrorText = 'Phone number must contain only numbers';
+        }
+      } else {
+        phoneErrorText = '';
+      }
       
-      loginErrorText = login.isNotEmpty && !validLogin 
-          ? 'Username/Email must be at least 3 characters' 
-          : '';
-      passwordErrorText = password.isNotEmpty && !validPassword 
-          ? 'Password must be at least 3 characters' 
-          : '';
-      
-      isButtonEnabled = validLogin && validPassword;
+      isButtonEnabled = isPhoneValid && isChecked;
     });
   }
-
-  Future<void> _performLogin() async {
+  
+  Future<void> _sendVerification() async {
     if (!isButtonEnabled || _isLoading) return;
     
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+    });
     
     try {
-      final login = loginController.text.trim();
-      final password = passwordController.text.trim();
+      final phone = phoneController.text.trim();
       
       final authService = AuthService();
-      final result = await authService.login(login, password);
+      final result = await authService.sendVerificationCode(phone);
       
       if (mounted) setState(() => _isLoading = false);
       
-    if (result['success'] == true) {
-  if (mounted) {
-    Navigator.pushReplacementNamed(context, '/home');
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Welcome back! Login successful.'),
-        backgroundColor: Color(0xFF10B981),
-        duration: Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-}
-      else {
+      if (result['success'] == true) {
+        if (mounted) {
+          Navigator.pushNamed(context, '/verify-otp', arguments: {
+            'phone': phone,
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Verification code sent successfully!'),
+              backgroundColor: Color(0xFF10B981),
+              duration: Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(result['error'] ?? 'Login failed. Please try again.'),
+              content: Text(result['error'] ?? 'Failed to send verification code'),
               backgroundColor: Colors.red.shade600,
               duration: const Duration(seconds: 3),
               behavior: SnackBarBehavior.floating,
@@ -108,12 +108,14 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  bool _isNumeric(String str) {
+    return str.isNotEmpty && double.tryParse(str) != null;
+  }
+
   @override
   void dispose() {
-    loginController.dispose();
-    passwordController.dispose();
-    _signupRecognizer.dispose();
-    _forgotPasswordRecognizer.dispose();
+    phoneController.dispose();
+    _loginRecognizer.dispose();
     super.dispose();
   }
 
@@ -204,7 +206,7 @@ class _LoginScreenState extends State<LoginScreen> {
         
         // Welcome Text
         const Text(
-          'Welcome Back',
+          'Create Account',
           style: TextStyle(
             fontSize: 32,
             fontWeight: FontWeight.bold,
@@ -213,7 +215,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Login to continue your journey',
+          'Join us and start your journey',
           style: TextStyle(
             fontSize: 16,
             color: Colors.grey.shade600,
@@ -221,12 +223,12 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const SizedBox(height: 32),
         
-        // Login Field
+        // Phone Number Field
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Username or Email',
+              'Mobile Number',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -235,78 +237,16 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(height: 8),
             TextField(
-              controller: loginController,
-              keyboardType: TextInputType.text,
-              textInputAction: TextInputAction.next,
-              style: const TextStyle(fontSize: 16),
-              decoration: InputDecoration(
-                hintText: 'explain816 or user@gmail.com',
-                hintStyle: TextStyle(color: Colors.grey.shade400),
-                prefixIcon: Icon(
-                  Icons.person_outline,
-                  color: isLoginValid ? Colors.grey.shade600 : Colors.red.shade400,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFFEF4444), width: 2),
-                ),
-                errorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.red.shade400),
-                ),
-                errorText: loginErrorText.isNotEmpty ? loginErrorText : null,
-                filled: true,
-                fillColor: Colors.grey.shade50,
-                contentPadding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              onChanged: (_) => _validateForm(),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        
-        // Password Field
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Password',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: passwordController,
-              obscureText: _obscurePassword,
+              controller: phoneController,
+              keyboardType: TextInputType.phone,
               textInputAction: TextInputAction.done,
               style: const TextStyle(fontSize: 16),
-              onSubmitted: (_) => _performLogin(),
               decoration: InputDecoration(
-                hintText: 'Enter your password',
+                hintText: '0333 1234567',
                 hintStyle: TextStyle(color: Colors.grey.shade400),
                 prefixIcon: Icon(
-                  Icons.lock_outline,
-                  color: isPasswordValid ? Colors.grey.shade600 : Colors.red.shade400,
-                ),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                    color: Colors.grey.shade600,
-                  ),
-                  onPressed: () {
-                    setState(() => _obscurePassword = !_obscurePassword);
-                  },
+                  Icons.phone_android_outlined,
+                  color: isPhoneValid ? Colors.grey.shade600 : Colors.red.shade400,
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -324,7 +264,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: Colors.red.shade400),
                 ),
-                errorText: passwordErrorText.isNotEmpty ? passwordErrorText : null,
+                errorText: phoneErrorText.isNotEmpty ? phoneErrorText : null,
                 filled: true,
                 fillColor: Colors.grey.shade50,
                 contentPadding: const EdgeInsets.symmetric(vertical: 16),
@@ -332,37 +272,72 @@ class _LoginScreenState extends State<LoginScreen> {
               onChanged: (_) => _validateForm(),
             ),
           ],
-        ),
-        
-        // Forgot Password Link
-        const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.centerRight,
-          child: GestureDetector(
-            onTap: () => Navigator.pushNamed(context, '/forgot-password'),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-              child: Text(
-                'Forgot Password?',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFFEF4444),
-                  decoration: TextDecoration.underline,
-                  decorationColor: const Color(0xFFEF4444),
-                ),
-              ),
-            ),
-          ),
         ),
         
         const SizedBox(height: 24),
         
-        // Login Button
+        // Terms and Conditions Checkbox
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Transform.scale(
+              scale: 1.2,
+              child: Checkbox(
+                value: isChecked,
+                activeColor: const Color(0xFFEF4444),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    isChecked = value ?? false;
+                    _validateForm();
+                  });
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: RichText(
+                text: TextSpan(
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade700,
+                    height: 1.4,
+                  ),
+                  children: [
+                    const TextSpan(text: 'I agree to the '),
+                    TextSpan(
+                      text: 'Terms of Service',
+                      style: TextStyle(
+                        color: const Color(0xFFEF4444),
+                        fontWeight: FontWeight.w600,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                    const TextSpan(text: ' and '),
+                    TextSpan(
+                      text: 'Privacy Policy',
+                      style: TextStyle(
+                        color: const Color(0xFFEF4444),
+                        fontWeight: FontWeight.w600,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        
+        const SizedBox(height: 24),
+        
+        // Send Code Button
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: isButtonEnabled && !_isLoading ? _performLogin : null,
+            onPressed: isButtonEnabled && !_isLoading ? _sendVerification : null,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFEF4444),
               foregroundColor: Colors.white,
@@ -383,7 +358,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   )
                 : const Text(
-                    'Login',
+                    'Send Verification Code',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -415,7 +390,7 @@ class _LoginScreenState extends State<LoginScreen> {
         
         const SizedBox(height: 24),
         
-        // Sign Up Link
+        // Login Link
         Center(
           child: RichText(
             text: TextSpan(
@@ -424,15 +399,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 color: Colors.grey.shade600,
               ),
               children: [
-                const TextSpan(text: "Don't have an account? "),
+                const TextSpan(text: 'Already have an account? '),
                 TextSpan(
-                  text: 'Sign up',
+                  text: 'Login',
                   style: const TextStyle(
                     color: Color(0xFFEF4444),
                     fontWeight: FontWeight.w700,
                     decoration: TextDecoration.underline,
                   ),
-                  recognizer: _signupRecognizer,
+                  recognizer: _loginRecognizer,
                 ),
               ],
             ),
@@ -452,7 +427,12 @@ class _LoginScreenState extends State<LoginScreen> {
       height: height,
       width: double.infinity,
       decoration: BoxDecoration(
-        borderRadius: const BorderRadius.all(Radius.circular(32)),
+        borderRadius: const BorderRadius.only(
+          topRight: Radius.circular(32),
+          bottomRight: Radius.circular(32),
+          topLeft: Radius.circular(32),
+          bottomLeft: Radius.circular(32),
+        ),
         image: DecorationImage(
           image: const AssetImage('assets/col7.png'),
           fit: BoxFit.cover,
@@ -466,14 +446,19 @@ class _LoginScreenState extends State<LoginScreen> {
         children: [
           // Gradient Overlay for better text readability
           Container(
-            decoration: const BoxDecoration(
-              borderRadius: BorderRadius.all(Radius.circular(32)),
+            decoration: BoxDecoration(
+              borderRadius: const BorderRadius.only(
+                topRight: Radius.circular(32),
+                bottomRight: Radius.circular(32),
+                topLeft: Radius.circular(32),
+                bottomLeft: Radius.circular(32),
+              ),
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
                   Colors.transparent,
-                  Colors.black54,
+                  Colors.black.withOpacity(0.6),
                 ],
               ),
             ),
@@ -494,7 +479,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Text(
-                    '✨ Premium Quality',
+                    '♻️ Sustainable Fashion',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -504,7 +489,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  '"Welcome back — continue your journey with us."',
+                  '"Give your clothes a new life — and earn from it."',
                   style: TextStyle(
                     fontSize: fontSize,
                     fontWeight: FontWeight.w900,
@@ -521,7 +506,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Sustainable fashion starts here',
+                  'Join the circular fashion revolution',
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.white.withOpacity(0.9),

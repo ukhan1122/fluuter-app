@@ -5,14 +5,16 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../services/search_service.dart';
-import '../screens/search_results_screen.dart';
-import '../screens/login.dart';
 import '../screens/profile/profile_screen.dart';
-import '../screens/cart_screen.dart';
 import '../providers/cart_provider.dart';
-import '../screens/favorites_screen.dart'; // Add this import
 import '../providers/favorites_provider.dart';
-import '../screens/home_screen.dart';
+
+import '../screens/main/search_results_screen.dart';
+import '../screens/auth/login.dart';
+import '../screens/checkout/cart_screen.dart';
+import '../screens/product/favorites_screen.dart';
+
+import '../screens/main/home_screen.dart';
 
 class GlobalSearchBar extends StatefulWidget implements PreferredSizeWidget {
   const GlobalSearchBar({super.key});
@@ -167,7 +169,7 @@ class _GlobalSearchBarState extends State<GlobalSearchBar> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const FavoritesScreen()),
+MaterialPageRoute(builder: (context) => FavoritesScreen()),
               );
             },
           ),
@@ -210,7 +212,8 @@ class _GlobalSearchBarState extends State<GlobalSearchBar> {
           IconButton(
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const CartScreen()),
+              
+MaterialPageRoute(builder: (context) => CartScreen()),
             ),
             icon: const Icon(Icons.shopping_cart_outlined, color: Colors.black87),
           ),
@@ -296,7 +299,7 @@ class _GlobalSearchBarState extends State<GlobalSearchBar> {
       child: TextButton(
         onPressed: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
+MaterialPageRoute(builder: (context) => LoginScreen()),
         ).then((_) {
           _loadUserData();
         }),

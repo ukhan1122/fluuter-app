@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import '../screens/cart_screen.dart';
 import '../models/cart_item.dart';
 import '../models/product.dart' as model;  // ✅ WITH ALIAS
 import 'product_grid.dart';
 import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
-import '../screens/seller_profile_screen.dart'; // This also has a Product class
+
+import '../screens/checkout/cart_screen.dart';
+import '../screens/product/seller_profile_screen.dart';
 import 'package:url_launcher/url_launcher.dart';  // ✅ ADD THIS IMPORT
 import '../services/api_service.dart';
 import '../providers/favorites_provider.dart';
@@ -1873,7 +1874,8 @@ Future<Map<String, dynamic>> _makeOffer({
                                     ScaffoldMessenger.of(context).hideCurrentSnackBar();
                                     Navigator.push(
                                       context,
-                                      MaterialPageRoute(builder: (context) => const CartScreen()),
+                                      
+MaterialPageRoute(builder: (context) => CartScreen()),
                                     );
                                   },
                                   style: TextButton.styleFrom(

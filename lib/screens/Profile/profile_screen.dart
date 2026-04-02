@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:my_splash_app/models/product.dart';
-import '../create_listing_screen.dart';
+import '../product/create_listing_screen.dart';
 import 'providers/profile_provider.dart';
 import 'widgets/profile_header.dart';
 import 'widgets/stats_cards.dart';

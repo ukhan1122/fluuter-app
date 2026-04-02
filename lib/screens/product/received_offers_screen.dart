@@ -1,17 +1,17 @@
 // lib/screens/received_offers_screen.dart
 
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../models/offer.dart';
-import '../widgets/product_detail.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../models/product.dart' as model;
-import '../services/api_service.dart'; // For ProductCache
 import 'package:provider/provider.dart';
-import '../providers/cart_provider.dart';
-import '../screens/cart_screen.dart';
-import '../models/cart_item.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
+import '../../models/offer.dart';
+import '../../models/cart_item.dart';
+import '../../models/product.dart' as model;
+import '../../services/api_service.dart';
+import '../../widgets/product_detail.dart';
+import '../checkout/cart_screen.dart';
+import '../../providers/cart_provider.dart';
+import 'dart:convert';
 
 class ReceivedOffersScreen extends StatefulWidget {
   const ReceivedOffersScreen({super.key});
