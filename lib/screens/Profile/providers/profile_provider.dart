@@ -1,7 +1,8 @@
+// lib/screens/profile/providers/profile_provider.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../models/product.dart';  // ← Fix this path
+import 'package:my_splash_app/models/product.dart';  // ← CHANGE THIS LINE
 import '../../../services/api_service.dart';
 
 class ProfileProvider extends ChangeNotifier {
@@ -12,11 +13,19 @@ class ProfileProvider extends ChangeNotifier {
   String userName = '';
   String userEmail = '';
   String? userProfilePicture;
+  String shopDescription = '';
   String? authToken;
   String memberSince = '';
   double totalEarnings = 0.0;
   int totalFollowers = 0;
   int totalFollowing = 0;
+
+  // Helper method to fix image URLs for emulator
+  String _fixImageUrl(String? url) {
+    if (url == null || url.isEmpty) return '';
+    String filename = url.split('/').last;
+    return 'http://10.0.2.2/api/get-image/$filename';
+  }
 
   Future<void> loadUserData() async {
     isLoading = true;
@@ -53,7 +62,8 @@ class ProfileProvider extends ChangeNotifier {
   void _updateUserDataFromJson(Map<String, dynamic> userData) {
     userName = userData['first_name']?.toString() ?? 'User';
     userEmail = userData['email']?.toString() ?? 'No email';
-    userProfilePicture = userData['profile_picture']?.toString();
+    userProfilePicture = _fixImageUrl(userData['profile_picture']?.toString());
+    shopDescription = userData['shop_description']?.toString() ?? userData['description']?.toString() ?? '';
     totalFollowers = userData['followers_count'] ?? 0;
     totalFollowing = userData['following_count'] ?? 0;
     notifyListeners();
@@ -66,13 +76,35 @@ class ProfileProvider extends ChangeNotifier {
   Future<void> fetchUserProducts() async {
     if (authToken == null) return;
     
-    final allProducts = await ApiService.getUserProducts(authToken!);
-    
-    sellingItems = allProducts.where((p) => !p.sold && p.active).toList();
-    soldItems = allProducts.where((p) => p.sold || !p.active).toList();
-    totalEarnings = soldItems.fold(0.0, (sum, p) => sum + p.price);
-    
-    notifyListeners();
+    try {
+      final allProducts = await ApiService.getUserProducts(authToken!);
+      
+      sellingItems.clear();
+      soldItems.clear();
+      
+      print('📦 Total products from API: ${allProducts.length}');
+      
+      for (var product in allProducts) {
+        if (product.sold == true) {
+          soldItems.add(product);
+          print('✅ Added to SOLD: ${product.title}');
+        } else {
+          if (product.active == true) {
+            sellingItems.add(product);
+            print('✅ Added to SELLING: ${product.title}');
+          }
+        }
+      }
+      
+      totalEarnings = soldItems.fold(0.0, (sum, item) => sum + item.price);
+      
+      print('📊 Selling: ${sellingItems.length}, Sold: ${soldItems.length}');
+      print('📊 Total earnings: $totalEarnings');
+      
+      notifyListeners();
+    } catch (e) {
+      print('Error fetching products: $e');
+    }
   }
 
   Future<void> fetchUserStats() async {
@@ -80,11 +112,15 @@ class ProfileProvider extends ChangeNotifier {
   }
 
   Future<void> deleteProduct(Product product) async {
-    final deleted = await ApiService.deleteProduct(productId: product.id.toString());
-    if (deleted) {
-      sellingItems.removeWhere((p) => p.id == product.id);
-      soldItems.removeWhere((p) => p.id == product.id);
-      notifyListeners();
+    try {
+      final deleted = await ApiService.deleteProduct(productId: product.id.toString());
+      if (deleted) {
+        sellingItems.removeWhere((p) => p.id == product.id);
+        soldItems.removeWhere((p) => p.id == product.id);
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error deleting product: $e');
     }
   }
 }

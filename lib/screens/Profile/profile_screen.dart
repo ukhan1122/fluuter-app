@@ -1,9 +1,7 @@
 // lib/screens/profile/profile_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/product.dart';  // ← Fix this path
-import '../../screens/received_offers_screen.dart';  // ← Fix this path
+import 'package:my_splash_app/models/product.dart';
 import '../create_listing_screen.dart';
 import 'providers/profile_provider.dart';
 import 'widgets/profile_header.dart';
@@ -26,6 +24,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    
+    _tabController.addListener(() {
+      print('🔄 Tab changed to: ${_tabController.index == 0 ? 'SELLING' : 'SOLD'}');
+    });
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ProfileProvider>().loadUserData();
     });
@@ -52,30 +55,41 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             onRefresh: () => provider.loadUserData(),
             color: Colors.red,
             child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                SliverToBoxAdapter(child: ProfileHeader(
-                  userName: provider.userName,
-                  userEmail: provider.userEmail,
-                  userProfilePicture: provider.userProfilePicture,
-                  memberSince: provider.memberSince,
-                  onEditProfile: () => _showEditProfileDialog(provider),
-                )),
-                SliverToBoxAdapter(child: StatsCards(
-                  totalItems: provider.sellingItems.length + provider.soldItems.length,
-                  totalEarnings: provider.totalEarnings,
-                  totalFollowers: provider.totalFollowers,
-                  totalFollowing: provider.totalFollowing,
-                  onViewOffers: () => Navigator.push(
-                    context, 
-                    MaterialPageRoute(builder: (_) => const ReceivedOffersScreen())
+                // Header section - doesn't scroll
+                SliverToBoxAdapter(
+                  child: ProfileHeader(
+                    userName: provider.userName,
+                    userEmail: provider.userEmail,
+                    userProfilePicture: provider.userProfilePicture,
+                    shopDescription: provider.shopDescription,
+                    memberSince: provider.memberSince,
+                    onEditProfile: () => _showEditProfileDialog(provider),
                   ),
-                )),
-                SliverToBoxAdapter(child: _buildTabBar(provider)),
-                SliverPadding(
-                  padding: const EdgeInsets.all(16),
-                  sliver: _tabController.index == 0
-                      ? _buildProductList(provider.sellingItems, false, provider)
-                      : _buildProductList(provider.soldItems, true, provider),
+                ),
+                SliverToBoxAdapter(
+                  child: StatsCards(
+                    totalItems: provider.sellingItems.length + provider.soldItems.length,
+                    totalEarnings: provider.totalEarnings,
+                    totalFollowers: provider.totalFollowers,
+                    totalFollowing: provider.totalFollowing,
+                    onViewOffers: () {},
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: _buildTabBar(provider),
+                ),
+                // Product list - scrollable
+                SliverFillRemaining(
+                  hasScrollBody: true,
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildProductList(provider.sellingItems, false, provider),
+                      _buildProductList(provider.soldItems, true, provider),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -129,7 +143,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
   Widget _buildTabBar(ProfileProvider provider) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       height: 50,
       decoration: BoxDecoration(
         color: Colors.grey[100], 
@@ -171,49 +185,42 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
   Widget _buildProductList(List<Product> items, bool isSold, ProfileProvider provider) {
     if (items.isEmpty) {
-      return SliverFillRemaining(
-        hasScrollBody: false,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.storefront_outlined, size: 64, color: Colors.grey[400]),
-              const SizedBox(height: 16),
-              Text(
-                isSold ? 'No sold items yet' : 'No items for sale',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
-              ),
-              const SizedBox(height: 8),
-              Text(
-                isSold ? 'Your sold items will appear here' : 'Start selling by creating your first listing',
-                style: TextStyle(color: Colors.grey[600])
-              ),
-              const SizedBox(height: 24),
-              if (!isSold)
-                ElevatedButton(
-                  onPressed: () => Navigator.push(
-                    context, 
-                    MaterialPageRoute(builder: (_) => const CreateListingScreen())
-                  ),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  child: const Text('Create Listing'),
-                ),
-            ],
-          ),
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.storefront_outlined, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              isSold ? 'No sold items yet' : 'No items for sale',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isSold ? 'Your sold items will appear here' : 'Start selling by creating your first listing',
+              style: TextStyle(color: Colors.grey[600])
+            ),
+          ],
         ),
       );
     }
 
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) => ProductCard(
-          product: items[index],
-          isSold: isSold,
-          onEdit: () => _showEditProductDialog(items[index], provider),
-          onDelete: () => _confirmDeleteProduct(items[index], provider),
-        ),
-        childCount: items.length,
-      ),
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(16),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final product = items[index];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: ProductCard(
+            product: product,
+            isSold: isSold,
+            onEdit: () => _showEditProductDialog(product, provider),
+            onDelete: () => _confirmDeleteProduct(product, provider),
+          ),
+        );
+      },
     );
   }
 
@@ -226,6 +233,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         userName: provider.userName,
         userEmail: provider.userEmail,
         userProfilePicture: provider.userProfilePicture,
+        shopDescription: provider.shopDescription,
         authToken: provider.authToken,
         onProfileUpdated: () => provider.loadUserData(),
       ),

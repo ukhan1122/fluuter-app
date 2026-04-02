@@ -161,8 +161,8 @@ class _VerifyOTPScreenState extends State<VerifyOTPScreen> {
           // White card with rounded top corners
           DraggableScrollableSheet(
             initialChildSize: 0.75,
-            minChildSize: 0.6,
-            maxChildSize: 0.95,
+            minChildSize: 0.75,
+            maxChildSize: 0.85,
             builder: (context, scrollController) {
               return Container(
                 decoration: const BoxDecoration(

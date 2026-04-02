@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:intl/intl.dart';
 import '../screens/create_listing_screen.dart';
 import '../screens/favorites_screen.dart';
+import '../screens/login.dart';
 
 class OverviewScreen extends StatefulWidget {
   const OverviewScreen({super.key});
@@ -66,7 +67,6 @@ class _OverviewScreenState extends State<OverviewScreen> {
           }
         }
 
-        // Get follower counts
         totalFollowers = userData['followers_count'] ?? 0;
         totalFollowing = userData['following_count'] ?? 0;
       }
@@ -85,6 +85,52 @@ class _OverviewScreenState extends State<OverviewScreen> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  // Auth check method
+  Future<void> _checkAuthAndNavigate(Widget destination) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    
+    if (token != null && token.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => destination),
+      );
+    } else {
+      _showLoginRequiredDialog();
+    }
+  }
+
+  void _showLoginRequiredDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Login Required'),
+        content: const Text('You need to be logged in to create a listing.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Login'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -123,11 +169,9 @@ class _OverviewScreenState extends State<OverviewScreen> {
               backgroundImage: userProfilePicture != null && userProfilePicture!.isNotEmpty
                   ? NetworkImage(userProfilePicture!)
                   : null,
+              // Removed the hardcoded 'U' - now shows nothing when no image
               child: userProfilePicture == null || userProfilePicture!.isEmpty
-                  ? Text(
-                      userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red),
-                    )
+                  ? null  // ← Removed the hardcoded 'U'
                   : null,
             ),
           ),
@@ -241,12 +285,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
                             icon: Icons.add_circle_outline,
                             label: 'Create Listing',
                             color: Colors.green,
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => CreateListingScreen()),
-                              );
-                            },
+                            onTap: () => _checkAuthAndNavigate(const CreateListingScreen()), // ← Updated
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -255,12 +294,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
                             icon: Icons.favorite_outline,
                             label: 'Favorites',
                             color: Colors.red,
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                             MaterialPageRoute(builder: (context) => FavoritesScreen()),
-                              );
-                            },
+                            onTap: () => _checkAuthAndNavigate(const FavoritesScreen()), // ← Updated
                           ),
                         ),
                       ],

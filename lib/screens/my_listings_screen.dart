@@ -7,6 +7,7 @@ import '../models/product.dart';
 import '../widgets/product_detail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../screens/create_listing_screen.dart';
+import '../screens/login.dart';
 
 class MyListingsScreen extends StatefulWidget {
   const MyListingsScreen({super.key});
@@ -41,6 +42,52 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  // Auth check method
+  Future<void> _checkAuthAndNavigate(Widget destination) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    
+    if (token != null && token.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => destination),
+      );
+    } else {
+      _showLoginRequiredDialog();
+    }
+  }
+
+  void _showLoginRequiredDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Login Required'),
+        content: const Text('You need to be logged in to create a listing.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Login'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -93,12 +140,7 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add_circle_outline, color: Colors.red),
-            onPressed: () {
-              Navigator.push(
-                context,
-               MaterialPageRoute(builder: (context) => CreateListingScreen()),
-              );
-            },
+            onPressed: () => _checkAuthAndNavigate(const CreateListingScreen()), // ← Updated
           ),
         ],
       ),
@@ -126,12 +168,7 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
                           ),
                           const SizedBox(height: 20),
                           ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context, 
-                               MaterialPageRoute(builder: (context) => CreateListingScreen()),
-                              );
-                            },
+                            onPressed: () => _checkAuthAndNavigate(const CreateListingScreen()), // ← Updated
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.red,
                               foregroundColor: Colors.white,

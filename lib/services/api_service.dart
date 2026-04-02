@@ -9,6 +9,7 @@ import '../models/offer.dart';  // ← ADD THIS
 import 'dart:io';
 import 'auth_service.dart';
 import '../config.dart';
+import '../models/product.dart';
 
 // Import modular APIs
 import 'api/api_client.dart';

@@ -306,16 +306,16 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
     super.dispose();
   }
 
-
-void _navigateToPayoutSettings(BuildContext context) {
-  Navigator.pop(context);
-  Navigator.push(
-    context,
-    MaterialPageRoute(builder: (context) => const BankAccountScreen()),
-  ).then((_) {
-    _loadUserData();
-  });
-}
+  void _navigateToPayoutSettings(BuildContext context) {
+    Navigator.pop(context);
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const BankAccountScreen()),
+    ).then((_) {
+      _loadUserData();
+    });
+  }
+  
   Future<void> _loadUserData() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('auth_token');
@@ -348,7 +348,7 @@ void _navigateToPayoutSettings(BuildContext context) {
     
     try {
       print('🔄 Fetching unread offer count...');
-final offers = await ApiService.getReceivedOffers();
+      final offers = await ApiService.getReceivedOffers();
 
       final unreadCount = offers.where((offer) => 
         offer.status == 'pending'
@@ -364,6 +364,52 @@ final offers = await ApiService.getReceivedOffers();
     } catch (e) {
       print('❌ Error loading unread offer count: $e');
     }
+  }
+
+  // ============ AUTH CHECK METHOD ============
+  Future<void> _checkAuthAndNavigate(BuildContext context, Widget destination) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    
+    if (token != null && token.isNotEmpty) {
+      // User is logged in, navigate to destination
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => destination),
+      );
+    } else {
+      // User is not logged in, show login dialog
+      _showLoginRequiredDialog(context);
+    }
+  }
+
+  void _showLoginRequiredDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Login Required'),
+        content: const Text('You need to be logged in to create a listing.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red,
+    foregroundColor: Colors.white,),
+            child: const Text('Login'),
+          ),
+        ],
+      ),
+    );
   }
 
   // ============ NAVIGATION METHODS ============
@@ -416,10 +462,7 @@ final offers = await ApiService.getReceivedOffers();
 
   void _navigateToCreateListing(BuildContext context) {
     Navigator.pop(context);
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const CreateListingScreen()),
-    );
+    _checkAuthAndNavigate(context, const CreateListingScreen());  // ← UPDATED
   }
 
   void _navigateToProfile(BuildContext context, {int? tab}) {
@@ -434,10 +477,7 @@ final offers = await ApiService.getReceivedOffers();
 
   void _navigateToFavorites(BuildContext context) {
     Navigator.pop(context);
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const FavoritesScreen()),
-    );
+    _checkAuthAndNavigate(context, const FavoritesScreen());  // ← ADDED AUTH CHECK
   }
 
   void _navigateToCart(BuildContext context) {
@@ -505,6 +545,7 @@ final offers = await ApiService.getReceivedOffers();
         color: Colors.white,
         child: Column(
           children: [
+            // ... your existing header code stays the same ...
             Container(
               width: double.infinity,
               decoration: BoxDecoration(
@@ -640,7 +681,7 @@ final offers = await ApiService.getReceivedOffers();
                   ),
                   _buildDrawerItem(
                     icon: Icons.dashboard_outlined,
-                    title: 'Overview',
+                    title: 'Your Selling Hub',
                     onTap: () => _navigateToOverview(context),
                   ),
                   
@@ -649,10 +690,10 @@ final offers = await ApiService.getReceivedOffers();
                   _buildSectionTitle('SELLING'),
                   _buildDrawerItem(
                     icon: Icons.add_circle_outline,
-                    title: 'Create Listing',
-                    onTap: () => _navigateToCreateListing(context),
+                    title: 'Sell Now',
+                    onTap: () => _navigateToCreateListing(context),  // ← UPDATED
                     iconColor: Colors.green,
-                    badge: 'New',
+                    
                   ),
                   _buildDrawerItem(
                     icon: Icons.shopping_bag_outlined,
@@ -665,7 +706,6 @@ final offers = await ApiService.getReceivedOffers();
                     onTap: () => _navigateToSoldItems(context),
                   ),
                   
-                  // OFFERS MENU ITEM WITH BADGE
                   _buildDrawerItem(
                     icon: Icons.local_offer_outlined,
                     title: 'Offers',
@@ -676,42 +716,41 @@ final offers = await ApiService.getReceivedOffers();
                                       
                   const Divider(height: 24, thickness: 1),
                   
-                 _buildSectionTitle('ACCOUNT'),
-if (_isLoggedIn) ...[
-  _buildDrawerItem(
-    icon: Icons.person_outline,
-    title: 'Profile',
-    onTap: () => _navigateToProfile(context),
-  ),
-  _buildDrawerItem(
-    icon: Icons.favorite_outline,
-    title: 'Favorites',
-    onTap: () => _navigateToFavorites(context),
-  ),
-  _buildDrawerItem(
-    icon: Icons.shopping_cart_outlined,
-    title: 'Cart',
-    onTap: () => _navigateToCart(context),
-  ),
-  // ✅ ADD THIS NEW MENU ITEM - Payout Settings
-  _buildDrawerItem(
-    icon: Icons.account_balance_wallet_outlined,
-    title: 'Wallet',
-    onTap: () => _navigateToPayoutSettings(context),
-    iconColor: Colors.green,
-  ),
-] else ...[
-  _buildDrawerItem(
-    icon: Icons.login_outlined,
-    title: 'Login',
-    onTap: () => _navigateToLogin(context),
-  ),
-  _buildDrawerItem(
-    icon: Icons.person_add_outlined,
-    title: 'Sign Up',
-    onTap: () => _navigateToSignup(context),
-  ),
-],
+                  _buildSectionTitle('ACCOUNT'),
+                  if (_isLoggedIn) ...[
+                    _buildDrawerItem(
+                      icon: Icons.person_outline,
+                      title: 'Profile',
+                      onTap: () => _navigateToProfile(context),
+                    ),
+                    _buildDrawerItem(
+                      icon: Icons.favorite_outline,
+                      title: 'Favorites',
+                      onTap: () => _navigateToFavorites(context),
+                    ),
+                    _buildDrawerItem(
+                      icon: Icons.shopping_cart_outlined,
+                      title: 'Cart',
+                      onTap: () => _navigateToCart(context),
+                    ),
+                    _buildDrawerItem(
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: 'Wallet',
+                      onTap: () => _navigateToPayoutSettings(context),
+                      iconColor: Colors.green,
+                    ),
+                  ] else ...[
+                    _buildDrawerItem(
+                      icon: Icons.login_outlined,
+                      title: 'Login',
+                      onTap: () => _navigateToLogin(context),
+                    ),
+                    _buildDrawerItem(
+                      icon: Icons.person_add_outlined,
+                      title: 'Sign Up',
+                      onTap: () => _navigateToSignup(context),
+                    ),
+                  ],
                   
                   const Divider(height: 24, thickness: 1),
                   
@@ -720,15 +759,18 @@ if (_isLoggedIn) ...[
                     icon: Icons.help_outline,
                     title: 'Help Center',
                     onTap: () => _showComingSoon(context, 'Help Center'),
+                    iconColor: Colors.black,           // ← Icon color
                   ),
                   _buildDrawerItem(
                     icon: Icons.message_outlined,
                     title: 'Contact Us',
+                    iconColor: Colors.black,           // ← Icon color
                     onTap: () => _showComingSoon(context, 'Contact Us'),
                   ),
                   _buildDrawerItem(
                     icon: Icons.info_outline,
                     title: 'About',
+                    iconColor: Colors.black,           // ← Icon color
                     onTap: () => _showComingSoon(context, 'About'),
                   ),
                   
@@ -791,6 +833,7 @@ if (_isLoggedIn) ...[
     required String title,
     required VoidCallback onTap,
     Color? iconColor,
+  Color? backgroundColor,  // ← ADD THIS LINE
     String? badge,
     Color? badgeColor,
   }) {
