@@ -8,7 +8,7 @@ import '../services/search_service.dart';
 import '../screens/profile/profile_screen.dart';
 import '../providers/cart_provider.dart';
 import '../providers/favorites_provider.dart';
-
+import '../utils/image_utils.dart';
 import '../screens/main/search_results_screen.dart';
 import '../screens/auth/login.dart';
 import '../screens/checkout/cart_screen.dart';
@@ -262,7 +262,7 @@ MaterialPageRoute(builder: (context) => CartScreen()),
         }),
         child: CircleAvatar(
           radius: 18,
-          backgroundImage: NetworkImage(_profilePicture!),
+          backgroundImage: NetworkImage(fixImageUrl(_profilePicture!)),
           backgroundColor: Colors.grey[200],
         ),
       ),

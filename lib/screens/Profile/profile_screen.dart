@@ -9,6 +9,7 @@ import 'widgets/stats_cards.dart';
 import 'widgets/product_card.dart';
 import 'widgets/edit_profile_dialog.dart';
 import 'widgets/edit_product_dialog.dart';
+import '../../utils/image_utils.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -127,8 +128,8 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             radius: 18,
             backgroundColor: Colors.white,
             backgroundImage: provider.userProfilePicture != null 
-                ? NetworkImage(provider.userProfilePicture!) 
-                : null,
+? NetworkImage(fixImageUrl(provider.userProfilePicture!))
+    : null,
             child: provider.userProfilePicture == null
                 ? Text(
                     provider.userName.isNotEmpty ? provider.userName[0].toUpperCase() : 'U',

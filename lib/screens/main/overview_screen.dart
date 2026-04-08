@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:intl/intl.dart';
-import '../../services/api_service.dart';
 import '../../models/product.dart';
 import '../../widgets/navbar.dart';
 import '../product/create_listing_screen.dart';
 import '../product/favorites_screen.dart';
 import '../auth/login.dart';
+import '../../services/api_service.dart';
+import '../../utils/image_utils.dart';
 
 class OverviewScreen extends StatefulWidget {
   const OverviewScreen({super.key});
@@ -167,7 +168,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
               radius: 18,
               backgroundColor: Colors.white,
               backgroundImage: userProfilePicture != null && userProfilePicture!.isNotEmpty
-                  ? NetworkImage(userProfilePicture!)
+? NetworkImage(fixImageUrl(userProfilePicture!))
                   : null,
               // Removed the hardcoded 'U' - now shows nothing when no image
               child: userProfilePicture == null || userProfilePicture!.isEmpty
@@ -452,7 +453,7 @@ _checkAuthAndNavigate(FavoritesScreen())  // ← Updated
               borderRadius: BorderRadius.circular(8),
               image: product.photoUrls.isNotEmpty
                   ? DecorationImage(
-                      image: NetworkImage(product.photoUrls.first),
+                    image: NetworkImage(fixImageUrl(product.photoUrls.first)),
                       fit: BoxFit.cover,
                     )
                   : null,

@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
+import '../config.dart';  // ← ADD THIS LINE for AppConfig
+import 'package:http/http.dart' as http;  // ← ADD THIS LINE
+import 'dart:math' show min;  // Add this at the top with other imports
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -13,51 +16,100 @@ class AuthService {
   String? get token => _token;
   Map<String, dynamic>? get userData => _userData;
 
-  Future<Map<String, dynamic>> login(String login, String password) async {
-    try {
-      print('🔐 REAL Login attempt for: $login');
+Future<Map<String, dynamic>> login(String login, String password) async {
+  try {
+    final response = await http.post(
+      Uri.parse('${AppConfig.baseUrl}/api/v1/auth/login'),
+      headers: AppConfig.getHeaders(),
+     body: json.encode({
+  'login': login,  // ✅ Correct - use 'login' field
+  'password': password,
+}),
+    );
+    
+    print('🔐 Login response status: ${response.statusCode}');
+    print('🔐 Login response body: ${response.body}');
+    
+    final data = json.decode(response.body);
+    
+    // Check for successful login (200 OK)
+    if (response.statusCode == 200) {
+      // Extract token from response
+      String? token;
+      if (data['token'] != null) {
+        token = data['token'];
+      } else if (data['access_token'] != null) {
+        token = data['access_token'];
+      } else if (data['data'] != null && data['data']['token'] != null) {
+        token = data['data']['token'];
+      }
       
-      final response = await ApiService.loginUser(
-        login: login,
-        password: password,
-      );
-
-      if (response['success'] == true && response['data'] != null) {
-        final data = response['data'];
+      // Save token and user data
+      if (token != null) {
+        _token = token;
+        await _saveTokenToPrefs(token);
         
-        _token = data['token'] ?? 
-                data['access_token'] ?? 
-                data['access'];
+        // Extract user data
+        Map<String, dynamic> userData = {};
+        if (data['user'] != null) {
+          userData = data['user'];
+        } else if (data['data'] != null && data['data']['user'] != null) {
+          userData = data['data']['user'];
+        }
         
-        if (_token != null) {
-          print('✅ Token received: ${_token!.substring(0, 20)}...');
-          
-          await _saveTokenToPrefs(_token!);
-          
-          if (data['user'] != null) {
-            _userData = data['user'];
-            await _saveUserDataToPrefs(_userData!);
-            print('✅ User data loaded: ${_userData!['username']}');
-          }
-          
-          return {
-            'success': true, 
-            'token': _token, 
-            'user': _userData,
-            'message': 'Login successful'
-          };
+        if (userData.isNotEmpty) {
+          _userData = userData;
+          await _saveUserDataToPrefs(userData);
+        }
+        
+        print('✅ Login successful! Token saved: ${token.substring(0, min(20, token.length))}...');
+        
+        return {
+          'success': true,
+          'data': data,
+          'token': token,
+          'user': userData,
+        };
+      } else {
+        print('⚠️ No token found in response');
+        return {
+          'success': true,  // Still success, but no token
+          'data': data,
+        };
+      }
+    } else {
+      // Handle error responses
+      String errorMessage = data['message'] ?? 'Login failed';
+      if (data['errors'] != null) {
+        final errors = data['errors'] as Map;
+        if (errors['email'] != null) {
+          errorMessage = errors['email'][0];
+        } else if (errors['password'] != null) {
+          errorMessage = errors['password'][0];
         }
       }
       
-      final errorMsg = response['error'] ?? 'Login failed - no token received';
-      print('❌ Login failed: $errorMsg');
-      return {'success': false, 'error': errorMsg};
+      print('❌ Login failed: $errorMessage');
       
-    } catch (e) {
-      print('❌ Login exception: $e');
-      return {'success': false, 'error': 'Connection error: $e'};
+      return {
+        'success': false,
+        'statusCode': response.statusCode,
+        'message': errorMessage,
+        'errors': data['errors'],
+        'error': data['error'],
+      };
     }
+  } catch (e) {
+    print('❌ Login error: $e');
+    return {
+      'success': false,
+      'statusCode': 500,
+      'error': e.toString(),
+      'message': 'Network error. Please check your connection.',
+    };
   }
+}
+
 
   // ✅ ADD THIS METHOD - Forgot Password
   Future<Map<String, dynamic>> forgotPassword(String email) async {

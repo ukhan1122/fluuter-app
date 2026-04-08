@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../../../models/product.dart';
 import '../../../services/api_service.dart';
+import '../../../utils/image_utils.dart';
 
 class EditProductDialog extends StatefulWidget {
   final Product product;
@@ -384,7 +385,7 @@ Future<void> _saveChanges() async {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(10),
                         image: DecorationImage(
-                          image: NetworkImage(existingImages[index]),
+                          image: NetworkImage(fixImageUrl(existingImages[index])),
                           fit: BoxFit.cover,
                         ),
                       ),

@@ -4,6 +4,8 @@ import '../../models/order.dart';
 import '../../providers/cart_provider.dart';
 import '../../services/api_service.dart';
 import 'package:provider/provider.dart';
+import '../../services/api_service.dart';
+import '../../utils/image_utils.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final List<CartItem> cartItems;
@@ -153,21 +155,85 @@ if (mounted) {
                   };
                 }).toList();
                 
+
+// First, create the delivery address
+print('📝 Creating delivery address...');
+final addressResult = await ApiService.createAddress(
+  address: _addressController.text.trim(),
+  city: _cityController.text.trim(),
+  phone: _phoneController.text.trim(),
+);
+
+if (!addressResult['success']) {
+  if (mounted && loadingDialogContext != null) {
+    Navigator.of(loadingDialogContext!).pop();
+  }
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Failed to save address. Please try again.')),
+  );
+  return;
+}
+final addressId = addressResult['data']['id'];
+print('✅ Address created with ID: $addressId');
+
+// Get seller ID from first cart item
+final sellerId = widget.cartItems.first.sellerId;
+print('👤 Seller ID: $sellerId');
+
+// ========== ADD THIS PART ==========
+// Sync cart items to backend
+print('🔄 Syncing cart with backend...');
+bool allAdded = true;
+
+for (var item in widget.cartItems) {
+  final productId = item.productId;  // It's already an integer
+  final added = await ApiService.addToCart(
+    productId: productId,
+    quantity: item.quantity,
+  );
+  print('Added product $productId (${item.title}): $added');
+  
+  if (!added) {
+    allAdded = false;
+    break;
+  }
+}
+
+if (!allAdded) {
+  if (mounted && loadingDialogContext != null) {
+    Navigator.of(loadingDialogContext!).pop();
+  }
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Failed to sync cart. Please try again.')),
+  );
+  return;
+}
+
+// Wait for cart to update
+await Future.delayed(const Duration(milliseconds: 500));
+// ========== END OF ADDED PART ==========
+
+// Prepare cart items for backend
+final cartItemsForBackend = widget.cartItems.map((item) {
+  return {
+    'product_id': item.productId,  // Already an integer
+    'quantity': item.quantity,
+  };
+}).toList();
+
+print('📦 Cart items for backend: $cartItemsForBackend');
+
+// Create the order
 final result = await ApiService.createOrder(
   orderData: {
-    'customer_name': _nameController.text,
-    'phone': _phoneController.text,
-    'email': _emailController.text,
-    'shipping_address': _addressController.text,
-    'city': _cityController.text,
-    'subtotal': _subtotal,  // ← Use _subtotal (the getter)
-    'delivery_charge': _deliveryCharge,  // ← Use _deliveryCharge (the getter)
-    'total': _total,  // ← Use _total (the getter)
-    'payment_method': _paymentMethod,  // ← Use _paymentMethod (state variable)
-    'delivery_option': _deliveryOption,  
-    'cart_items': orderItems, 
+    'seller_id': sellerId,
+    'delivery_address_id': addressId,
+    'cart_items': cartItemsForBackend,
   },
 );
+
+print('📦 Order result: $result');
+
                 
                  if (mounted && loadingDialogContext != null) {
   Navigator.of(loadingDialogContext!).pop();  
@@ -183,14 +249,16 @@ final result = await ApiService.createOrder(
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (!mounted) return;
                     
-                    if (result['success'] == true) {
-                      // Clear the cart
-final cartProvider = Provider.of(context, listen: false);
-                      cartProvider.clearCart();
-                      
-                      // Show success dialog
-                      _showOrderSuccessDialog(result['order_number']);
-                    } else {
+    if (result['success'] == true) {
+  // Clear the cart
+  final cartProvider = Provider.of<CartProvider>(context, listen: false);
+  cartProvider.clearCart();
+  
+  // Show success dialog with order data
+  print('🎉 Order successful! ID: ${result['data']['id']}');
+  _showOrderSuccessDialog(result['data']);
+}
+                else {
                       // Show error message
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -222,14 +290,39 @@ final cartProvider = Provider.of(context, listen: false);
       );
     }
   }
-
-  void _showOrderSuccessDialog(String orderNumber) {
-    if (!mounted) return;
-    
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) => AlertDialog(
+void _showOrderSuccessDialog(Map<String, dynamic> orderData) {
+  if (!mounted) return;
+  
+  // Helper function to convert to double safely
+  double toDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+  
+  final subtotal = toDouble(orderData['subtotal']) != 0 
+      ? toDouble(orderData['subtotal']) 
+      : _subtotal;
+      
+  final deliveryFee = toDouble(orderData['delivery_fee']) != 0 
+      ? toDouble(orderData['delivery_fee']) 
+      : _deliveryCharge;
+      
+  final totalAmount = toDouble(orderData['total_amount']) != 0 
+      ? toDouble(orderData['total_amount']) 
+      : _total;
+      
+  final trackingNo = orderData['tracking_no']?.toString() ?? '';
+  
+  print('🎉 Showing success dialog for order: $trackingNo');
+  
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext dialogContext) {
+      return AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: const Row(
           children: [
@@ -244,7 +337,7 @@ final cartProvider = Provider.of(context, listen: false);
             const Icon(Icons.receipt_long, size: 60, color: Colors.green),
             const SizedBox(height: 16),
             Text(
-              'Order #$orderNumber',
+              'Tracking #${trackingNo.isNotEmpty ? trackingNo : 'N/A'}',
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -261,7 +354,10 @@ final cartProvider = Provider.of(context, listen: false);
               ),
               child: Column(
                 children: [
-                  _buildConfirmDetail('Total', 'Rs.${_total.toStringAsFixed(0)}'),
+                  _buildConfirmDetail('Subtotal', 'Rs.${subtotal.toStringAsFixed(0)}'),
+                  _buildConfirmDetail('Delivery Fee', 'Rs.${deliveryFee.toStringAsFixed(0)}'),
+                  const Divider(height: 16),
+                  _buildConfirmDetail('Total', 'Rs.${totalAmount.toStringAsFixed(0)}'),
                   _buildConfirmDetail('Payment', _paymentMethod),
                   _buildConfirmDetail('Delivery', _deliveryOption),
                 ],
@@ -274,7 +370,7 @@ final cartProvider = Provider.of(context, listen: false);
             onPressed: () {
               Navigator.pop(dialogContext);
               if (mounted) {
-                Navigator.popUntil(context, (route) => route.isFirst);
+                Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
               }
             },
             style: ElevatedButton.styleFrom(
@@ -284,9 +380,10 @@ final cartProvider = Provider.of(context, listen: false);
             child: const Text('Continue Shopping'),
           ),
         ],
-      ),
-    );
-  }
+      );
+    },
+  );
+}
 
   Widget _buildConfirmDetail(String label, String value) {
     return Padding(
@@ -353,7 +450,7 @@ final cartProvider = Provider.of(context, listen: false);
             borderRadius: BorderRadius.circular(8),
             image: DecorationImage(
               image: item.image.startsWith('http') 
-                ? NetworkImage(item.image) as ImageProvider
+              ? NetworkImage(fixImageUrl(item.image)) as ImageProvider
                 : AssetImage(item.image),
               fit: BoxFit.cover,
             ),

@@ -64,39 +64,47 @@ class _VerifyOTPScreenState extends State<VerifyOTPScreen> {
     return _otpControllers.map((c) => c.text).join();
   }
   
-  Future<void> _verifyOTP() async {
-    final otp = _getFullOTP();
-    
-    if (otp.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter 6-digit code'), backgroundColor: Colors.red),
-      );
-      return;
-    }
-    
-    setState(() => _isLoading = true);
-    
-    try {
-      final result = await _authService.verifyOTP(widget.phone, otp);
-      
-      if (result['success'] == true) {
-        Navigator.pushReplacementNamed(context, '/home');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Phone verified successfully!'), backgroundColor: Colors.green),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result['error'] ?? 'Invalid verification code'), backgroundColor: Colors.red),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+Future<void> _verifyOTP() async {
+  final otp = _getFullOTP();
+  
+  if (otp.length != 6) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Please enter 6-digit code'), backgroundColor: Colors.red),
+    );
+    return;
   }
+  
+  setState(() => _isLoading = true);
+  
+  try {
+    final result = await _authService.verifyOTP(widget.phone, otp);
+    
+    if (result['success'] == true) {
+      // ✅ CHANGE THIS LINE - Navigate to signup details instead of home
+      Navigator.pushReplacementNamed(
+        context, 
+        '/signup-details',
+        arguments: {
+          'phone': widget.phone,
+        }
+      );
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Phone verified successfully!'), backgroundColor: Colors.green),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result['error'] ?? 'Invalid verification code'), backgroundColor: Colors.red),
+      );
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+    );
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
+  }
+}
   
   Future<void> _resendCode() async {
     if (!_canResend || _isResending) return;

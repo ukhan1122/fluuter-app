@@ -53,60 +53,121 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
-  Future<void> _performLogin() async {
-    if (!isButtonEnabled || _isLoading) return;
+ Future<void> _performLogin() async {
+  if (!isButtonEnabled || _isLoading) return;
+  
+  setState(() => _isLoading = true);
+  
+  try {
+    final login = loginController.text.trim();
+    final password = passwordController.text.trim();
     
-    setState(() => _isLoading = true);
     
-    try {
-      final login = loginController.text.trim();
-      final password = passwordController.text.trim();
-      
-      final authService = AuthService();
-      final result = await authService.login(login, password);
-      
-      if (mounted) setState(() => _isLoading = false);
-      
+    print('🔐 Attempting login with: $login');
+    final authService = AuthService();
+    final result = await authService.login(login, password);
+    
+    print('📦 Login result: $result');
+    
+    if (mounted) setState(() => _isLoading = false);
+    
     if (result['success'] == true) {
-  if (mounted) {
-    Navigator.pushReplacementNamed(context, '/home');
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Welcome back! Login successful.'),
-        backgroundColor: Color(0xFF10B981),
-        duration: Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-}
-      else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result['error'] ?? 'Login failed. Please try again.'),
-              backgroundColor: Colors.red.shade600,
-              duration: const Duration(seconds: 3),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      }
-    } catch (e) {
+      
+      print('✅ Login successful! Navigating to home...');
       if (mounted) {
-        setState(() => _isLoading = false);
+        
+        final isLoggedIn = await authService.isLoggedIn();
+        print('📱 Is logged in after login: $isLoggedIn');
+        Navigator.pushReplacementNamed(context, '/home');
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Connection error: ${e.toString()}'),
-            backgroundColor: Colors.red.shade600,
-            duration: const Duration(seconds: 3),
+          const SnackBar(
+            content: Text('Welcome back! Login successful.'),
+            backgroundColor: Color(0xFF10B981),
+            duration: Duration(seconds: 2),
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
+    } else {
+      // Handle 400 error and other errors professionally
+      if (mounted) {
+        String errorMessage = '';
+        
+        // Check if it's a 400 error with validation messages
+        if (result['statusCode'] == 400) {
+          if (result['errors'] != null) {
+            // Laravel validation errors
+            final errors = result['errors'] as Map;
+            if (errors['email'] != null) {
+              errorMessage = errors['email'][0];
+            } else if (errors['password'] != null) {
+              errorMessage = errors['password'][0];
+            } else if (errors['login'] != null) {
+              errorMessage = errors['login'][0];
+            } else {
+              errorMessage = 'Invalid credentials. Please check your email/username and password.';
+            }
+          } else if (result['message'] != null) {
+            errorMessage = result['message'];
+          } else {
+            errorMessage = 'Invalid email/username or password. Please try again.';
+          }
+        } else if (result['statusCode'] == 401) {
+          errorMessage = 'Unauthorized. Please check your credentials.';
+        } else if (result['statusCode'] == 404) {
+          errorMessage = 'Account not found. Please sign up first.';
+        } else {
+          errorMessage = result['error'] ?? 'Login failed. Please check your credentials and try again.';
+        }
+        
+        // Show professional error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white, size: 20),
+                const SizedBox(width: 12),
+                Expanded(child: Text(errorMessage)),
+              ],
+            ),
+            backgroundColor: Colors.red.shade600,
+            duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    }
+  } catch (e) {
+    if (mounted) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.wifi_off, color: Colors.white, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Unable to connect to server. Please check your internet connection.',
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red.shade600,
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
     }
   }
+}
 
   @override
   void dispose() {

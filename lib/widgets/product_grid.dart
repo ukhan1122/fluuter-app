@@ -1,9 +1,8 @@
-// lib/widgets/product_grid.dart - SIMPLIFIED (NO SEARCH)
-
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/api_service.dart';
 import 'product_detail.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ProductGrid extends StatefulWidget {
   final String section;
@@ -22,10 +21,13 @@ class ProductGrid extends StatefulWidget {
 }
 
 class _ProductGridState extends State<ProductGrid> {
-  late Future<List<Product>> _productsFuture;
+  List<Product> _allProducts = [];
+  List<Product> _displayProducts = [];
+  bool _isLoading = true;
   bool _showAllProducts = false;
   final ScrollController _productScrollController = ScrollController();
   final double _scrollAmount = 250.0;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -33,33 +35,52 @@ class _ProductGridState extends State<ProductGrid> {
     _loadProducts();
   }
 
-  void _loadProducts() {
-    print('🚀 Loading ${widget.section} products from CACHE...');
-    
-    String apiGroup = _mapSectionToGroup(widget.section);
-    
-    _productsFuture = ProductCache.getProducts().then((allProducts) {
-      if (apiGroup.isNotEmpty) {
-        final filtered = allProducts.where((product) {
-          final productGroup = product.categoryGroup?.toLowerCase() ?? '';
-          final targetGroup = apiGroup.toLowerCase();
-          
-          if (targetGroup == 'mens' && productGroup == 'men') return true;
-          if (targetGroup == 'womens' && productGroup == 'women') return true;
-          
-          return productGroup == targetGroup;
-        }).toList();
-        
-        print('✅ Found ${filtered.length} ${widget.section} products');
-        return filtered;
-      } else {
-        return allProducts;
-      }
+  Future<void> _loadProducts() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
     });
     
-    if (mounted) {
-      setState(() {});
+    print('🚀 Loading ${widget.section} products from CACHE...');
+    
+    try {
+      String apiGroup = _mapSectionToGroup(widget.section);
+      
+      final allProducts = await ProductCache.getProducts();
+      
+      final filtered = apiGroup.isNotEmpty 
+          ? allProducts.where((product) {
+              final productGroup = product.categoryGroup?.toLowerCase() ?? '';
+              final targetGroup = apiGroup.toLowerCase();
+              
+              if (targetGroup == 'mens' && productGroup == 'men') return true;
+              if (targetGroup == 'womens' && productGroup == 'women') return true;
+              if (targetGroup == 'kids' && productGroup == 'kids') return true;
+              
+              return productGroup == targetGroup;
+            }).toList()
+          : allProducts;
+      
+      print('✅ Found ${filtered.length} ${widget.section} products');
+      
+      setState(() {
+        _allProducts = filtered;
+        _updateDisplayProducts();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
     }
+  }
+  
+  void _updateDisplayProducts() {
+    final limit = _showAllProducts ? _allProducts.length : 6;
+    setState(() {
+      _displayProducts = _allProducts.take(limit).toList();
+    });
   }
 
   String _mapSectionToGroup(String section) {
@@ -112,67 +133,55 @@ class _ProductGridState extends State<ProductGrid> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Product>>(
-      future: _productsFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildLoadingSection();
-        }
+    if (_isLoading) {
+      return _buildLoadingSection();
+    }
 
-        if (snapshot.hasError) {
-          return _buildErrorSection(snapshot.error.toString());
-        }
+    if (_errorMessage != null) {
+      return _buildErrorSection(_errorMessage!);
+    }
 
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return _buildEmptySection();
-        }
+    if (_allProducts.isEmpty) {
+      return _buildEmptySection();
+    }
 
-        final allProducts = snapshot.data!;
-        final productsToShow = _showAllProducts
-            ? allProducts
-            : allProducts.take(6).toList();
-        final showArrows = widget.isHorizontal && !_showAllProducts;
+    final showArrows = widget.isHorizontal && !_showAllProducts;
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      widget.customTitle ?? widget.section,
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                    if (showArrows)
-                      Row(
-                        children: [
-                          _buildArrowButton(-1, Icons.arrow_back_ios_rounded),
-                          _buildArrowButton(1, Icons.arrow_forward_ios_rounded),
-                        ],
-                      ),
-                  ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  widget.customTitle ?? widget.section,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
-              ),
-              
-              const SizedBox(height: 10),
-              
-              // Product grid
-              widget.isHorizontal && !_showAllProducts
-                  ? _buildHorizontalLayout(productsToShow)
-                  : _buildVerticalGrid(productsToShow),
-              
-              // View all button
-              if (allProducts.length > 6)
-                _buildViewAllButton(allProducts.length),
-            ],
+                if (showArrows)
+                  Row(
+                    children: [
+                      _buildArrowButton(-1, Icons.arrow_back_ios_rounded),
+                      _buildArrowButton(1, Icons.arrow_forward_ios_rounded),
+                    ],
+                  ),
+              ],
+            ),
           ),
-        );
-      },
+          
+          const SizedBox(height: 10),
+          
+          widget.isHorizontal && !_showAllProducts
+              ? _buildHorizontalLayout(_displayProducts)
+              : _buildVerticalGrid(_displayProducts),
+          
+          if (_allProducts.length > 6)
+            _buildViewAllButton(),
+        ],
+      ),
     );
   }
 
@@ -236,12 +245,6 @@ class _ProductGridState extends State<ProductGrid> {
                     fontWeight: FontWeight.bold,
                     color: Colors.red[800],
                   ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  error.length > 100 ? '${error.substring(0, 100)}...' : error,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 10),
                 ElevatedButton(
@@ -414,23 +417,15 @@ class _ProductGridState extends State<ProductGrid> {
       
       return ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: Image.network(
-          imageUrl,
+        child: CachedNetworkImage(
+          imageUrl: imageUrl,
           fit: BoxFit.cover,
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return Center(
-              child: CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded / 
-                      loadingProgress.expectedTotalBytes!
-                    : null,
-              ),
-            );
-          },
-          errorBuilder: (context, error, stackTrace) {
-            return _buildPlaceholderImage();
-          },
+          placeholder: (context, url) => Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
+            ),
+          ),
+          errorWidget: (context, url, error) => _buildPlaceholderImage(),
         ),
       );
     } else {
@@ -450,32 +445,41 @@ class _ProductGridState extends State<ProductGrid> {
     );
   }
 
-  Widget _buildViewAllButton(int totalProducts) {
-    if (totalProducts > 6 && !_showAllProducts) {
+  Widget _buildViewAllButton() {
+    if (!_showAllProducts) {
       return Column(
         children: [
           const SizedBox(height: 10),
           Center(
             child: TextButton(
-              onPressed: () => setState(() => _showAllProducts = true),
+              onPressed: () {
+                setState(() {
+                  _showAllProducts = true;
+                  _updateDisplayProducts();
+                });
+              },
               child: const Text('View all →'),
             ),
           ),
         ],
       );
-    } else if (_showAllProducts) {
+    } else {
       return Column(
         children: [
           const SizedBox(height: 10),
           Center(
             child: TextButton(
-              onPressed: () => setState(() => _showAllProducts = false),
+              onPressed: () {
+                setState(() {
+                  _showAllProducts = false;
+                  _updateDisplayProducts();
+                });
+              },
               child: const Text('Show less'),
             ),
           ),
         ],
       );
     }
-    return const SizedBox.shrink();
   }
 }

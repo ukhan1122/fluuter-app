@@ -9,6 +9,7 @@ import '../../providers/follow_provider.dart';
 import '../../models/product.dart' as product_model;
 import '../../models/product.dart';
 import '../../widgets/product_detail.dart';
+import '../../utils/image_utils.dart';
 
 // Models
 class Seller {
@@ -608,7 +609,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> with SingleTi
                       children: [
                         CircleAvatar(
                           radius: 40,
-                          backgroundImage: NetworkImage(_seller!.avatarUrl),
+                          backgroundImage: NetworkImage(fixImageUrl(_seller!.avatarUrl)),
                           onBackgroundImageError: (_, __) {
                             // Don't set state here, just let it show the fallback
                           },
@@ -947,15 +948,16 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> with SingleTi
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(8),
                   ),
-                  image: DecorationImage(
-                    image: NetworkImage(
-                      product.photoUrls.isNotEmpty 
-                          ? product.photoUrls.first 
-                          : 'https://via.placeholder.com/300x200',
-                    ),
-                    fit: BoxFit.cover,
-                    onError: (exception, stackTrace) {},
-                  ),
+             // CORRECT (added closing parenthesis):
+image: DecorationImage(
+  image: NetworkImage(fixImageUrl(
+    product.photoUrls.isNotEmpty 
+        ? product.photoUrls.first 
+        : 'https://via.placeholder.com/300x200',
+  )),  // ← Added closing parenthesis here
+  fit: BoxFit.cover,
+  onError: (exception, stackTrace) {},
+),
                 ),
                 child: product.photoUrls.isEmpty 
                     ? Center(

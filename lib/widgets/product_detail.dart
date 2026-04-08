@@ -5,17 +5,17 @@ import '../models/product.dart' as model;  // ✅ WITH ALIAS
 import 'product_grid.dart';
 import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
-
 import '../screens/checkout/cart_screen.dart';
 import '../screens/product/seller_profile_screen.dart';
 import 'package:url_launcher/url_launcher.dart';  // ✅ ADD THIS IMPORT
 import '../services/api_service.dart';
 import '../providers/favorites_provider.dart';
 import 'dart:async'; // For TimeoutException
-import 'dart:convert'; // For jsonEncode
+import 'dart:convert'; 
 import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
 import '../config.dart';  // Add this import
+import '../utils/image_utils.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final String title, brand, price, category;
@@ -214,8 +214,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               children: [
                 // Main Image - Now updates when _currentImageIndex changes
                 if (images.isNotEmpty)
-                  Image.network(
-                    images[_currentImageIndex],
+                
+Image.network(
+  fixImageUrl(images[_currentImageIndex]),
                     fit: BoxFit.cover,
                     width: double.infinity,
                     height: double.infinity,
@@ -348,7 +349,8 @@ Positioned(
                         width: 2,
                       ),
                       image: DecorationImage(
-                        image: NetworkImage(images[index]),
+                        
+image: NetworkImage(fixImageUrl(images[index])),
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -381,8 +383,9 @@ Positioned(
               },
               itemBuilder: (context, index) {
                 return InteractiveViewer(
-                  child: Image.network(
-                    images[index],
+                  child: 
+Image.network(
+  fixImageUrl(images[index]),
                     fit: BoxFit.contain,
                     errorBuilder: (context, error, stackTrace) {
                       return Center(
@@ -934,7 +937,8 @@ Widget _buildSellerSection() {
                         children: [
                           CircleAvatar(
                             radius: 28,
-                            backgroundImage: profilePic != null ? NetworkImage(profilePic.toString()) : null,
+                            
+backgroundImage: profilePic != null ? NetworkImage(fixImageUrl(profilePic.toString())) : null,
                             backgroundColor: Colors.grey[200],
                             child: profilePic == null 
                                 ? const Icon(Icons.person, size: 28, color: Colors.grey) 
@@ -1358,8 +1362,9 @@ Future<void> _showMakeOfferDialog() async {
                             height: 60,
                             color: Colors.grey[200],
                             child: _imageUrls.isNotEmpty
-                                ? Image.network(
-                                    _imageUrls.first,
+                                ? 
+Image.network(
+  fixImageUrl(_imageUrls.first),
                                     fit: BoxFit.cover,
                                     errorBuilder: (context, error, stackTrace) {
                                       return const Icon(Icons.image, color: Colors.grey);

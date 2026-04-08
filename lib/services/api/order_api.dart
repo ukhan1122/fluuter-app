@@ -96,7 +96,7 @@ class OrderApi {
         '/api/v1/cart/checkout/create',
         token: token,
         body: orderData,
-        timeout: const Duration(seconds: 15),
+        timeout: const Duration(seconds: 45),
       );
       
       if (response.statusCode == 200 || response.statusCode == 201) {

@@ -19,6 +19,7 @@ import '../screens/product/my_listings_screen.dart';
 import '../screens/product/sold_items_screen.dart';
 import '../screens/product/received_offers_screen.dart';
 import '../screens/settings/bank_account_screen.dart';
+import '../utils/image_utils.dart';
 
 class CustomNavbar extends StatefulWidget implements PreferredSizeWidget {
   const CustomNavbar({super.key});
@@ -201,7 +202,7 @@ final offers = await ApiService.getReceivedOffers();
               }),
               child: CircleAvatar(
                 radius: 20,
-                backgroundImage: NetworkImage(_profilePicture!),
+                backgroundImage: NetworkImage(fixImageUrl(_profilePicture!)),
                 backgroundColor: Colors.grey[200],
                 child: _userName != null && _userName!.isNotEmpty
                     ? null
@@ -590,9 +591,9 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
                               child: CircleAvatar(
                                 radius: 35,
                                 backgroundColor: Colors.white,
-                                backgroundImage: _profilePicture != null && _profilePicture!.isNotEmpty
-                                    ? NetworkImage(_profilePicture!)
-                                    : null,
+                              backgroundImage: _profilePicture != null && _profilePicture!.isNotEmpty
+    ? NetworkImage(fixImageUrl(_profilePicture!))
+    : null,
                                 child: _profilePicture == null || _profilePicture!.isEmpty
                                     ? Text(
                                         _userName![0].toUpperCase(),

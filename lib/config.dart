@@ -13,7 +13,7 @@ class AppConfig {
   static const String ngrokUrl = 'https://untimid-nonobjectivistic-wade.ngrok-free.dev';
   
   // Production URL
-  static const String productionUrl = 'https://laravel-backend.onrender.com';
+  static const String productionUrl = 'https://larvel-production.up.railway.app';
   
   // Custom domain for iOS simulator/desktop
   static const String customDomain = 'http://depop-backend.test';

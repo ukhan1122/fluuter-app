@@ -15,6 +15,8 @@ import 'screens/auth/set_new_password_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/profile/providers/profile_provider.dart';
 import 'screens/product/seller_profile_screen.dart';
+import 'screens/auth/signup_details_screen.dart';
+import 'screens/auth/signup_success_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,55 +52,77 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CartProvider()), 
         ChangeNotifierProvider(create: (_) => FollowProvider()),
         ChangeNotifierProvider(create: (_) => FavoritesProvider()),
-    ChangeNotifierProvider( create: (_) => ProfileProvider()),
+        ChangeNotifierProvider(create: (_) => ProfileProvider()),
       ],
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'Closyyyy App',
-        initialRoute: '/home',
-        routes: {
-          '/home': (context) => const HomeScreen(),
-          '/login': (context) => const LoginScreen(),
-          '/signup': (context) => const SignupScreen(),
-          '/profile': (context) => const ProfileScreen(),
-          '/forgot-password': (context) => const ForgotPasswordScreen(),
-        },
-        onGenerateRoute: (settings) {
-          // Handle seller profile route
-       // Handle seller profile route
-if (settings.name == '/seller-profile') {
-  final args = settings.arguments as Map?;
-  return MaterialPageRoute(
-    builder: (context) => SellerProfileScreen(
-      sellerId: args?['sellerId'] ?? '',
-    ),
-  );
-}
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Calculate scale based on screen width (375 is base/Pixel 7a)
+          final scale = (constraints.maxWidth / 375).clamp(0.8, 1.2);
           
-          // Handle set-new-password
-          if (settings.name == '/set-new-password') {
-            final args = settings.arguments as Map?;
-            return MaterialPageRoute(
-              builder: (context) => SetNewPasswordScreen(
-                token: args?['token'] ?? '',
-              ),
-            );
-          }
-          
-          // Handle verify-otp
-          if (settings.name == '/verify-otp') {
-            final args = settings.arguments as Map?;
-            return MaterialPageRoute(
-              builder: (context) => VerifyOTPScreen(
-                phone: args?['phone'] ?? '',
-              ),
-            );
-          }
-          
-          // Fallback for any other route
-          print('Route not found: ${settings.name}');
-          return MaterialPageRoute(
-            builder: (context) => const HomeScreen(),
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.linear(scale),
+            ),
+            child: MaterialApp(
+              debugShowCheckedModeBanner: false,
+              title: 'Closyyyy App',
+              initialRoute: '/home',
+              routes: {
+                '/home': (context) => const HomeScreen(),
+                '/login': (context) => const LoginScreen(),
+                '/signup': (context) => const SignupScreen(),
+                '/profile': (context) => const ProfileScreen(),
+                '/forgot-password': (context) => const ForgotPasswordScreen(),
+                '/signup-success': (context) => const SignupSuccessScreen(),
+              },
+              onGenerateRoute: (settings) {
+                // Handle seller profile route
+                if (settings.name == '/seller-profile') {
+                  final args = settings.arguments as Map?;
+                  return MaterialPageRoute(
+                    builder: (context) => SellerProfileScreen(
+                      sellerId: args?['sellerId'] ?? '',
+                    ),
+                  );
+                }
+                
+                // Handle set-new-password
+                if (settings.name == '/set-new-password') {
+                  final args = settings.arguments as Map?;
+                  return MaterialPageRoute(
+                    builder: (context) => SetNewPasswordScreen(
+                      token: args?['token'] ?? '',
+                    ),
+                  );
+                }
+                
+                // Handle verify-otp
+                if (settings.name == '/verify-otp') {
+                  final args = settings.arguments as Map?;
+                  return MaterialPageRoute(
+                    builder: (context) => VerifyOTPScreen(
+                      phone: args?['phone'] ?? '',
+                    ),
+                  );
+                }
+
+                // Handle signup-details
+                if (settings.name == '/signup-details') {
+                  final args = settings.arguments as Map?;
+                  return MaterialPageRoute(
+                    builder: (context) => SignupDetailsScreen(
+                      phoneNumber: args?['phone'] ?? '',
+                    ),
+                  );
+                }
+                
+                // Fallback for any other route
+                print('Route not found: ${settings.name}');
+                return MaterialPageRoute(
+                  builder: (context) => const HomeScreen(),
+                );
+              },
+            ),
           );
         },
       ),
