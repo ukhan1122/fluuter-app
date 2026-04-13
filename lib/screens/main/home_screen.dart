@@ -5,7 +5,6 @@ import '../../widgets/hero_slider.dart';
 import '../../widgets/category_tags.dart';
 import '../../widgets/product_grid.dart';
 import '../../widgets/navbar.dart';
-import '../../widgets/global_search_bar.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -32,15 +31,17 @@ class _HomeScreenState extends State<HomeScreen> {
         : allCategories;
 
     return Scaffold(
-      appBar: GlobalSearchBar(),  // Remove 'const'
-drawer: CustomDrawer(),     // Remove 'const'
+      appBar: const CustomNavbar(),
+      drawer: const CustomDrawer(),
       body: SingleChildScrollView(
         child: Column(
           children: [
             const HeroSlider(),
             CategoryTags(onCategorySelected: onCategorySelected),
             const SizedBox(height: 10),
+            // Only show the selected category or all categories
             ...categoriesToShow.map((cat) => ProductGrid(
+              key: ValueKey(cat),  // ADD THIS - helps Flutter identify each grid
               section: cat,
               isHorizontal: selectedCategory == null,
             )).toList(),

@@ -364,76 +364,88 @@ image: NetworkImage(fixImageUrl(images[index])),
     );
   }
   
-  void _showFullScreenGallery(BuildContext context) {
-    final images = _imageUrls;
-    if (images.isEmpty) return;
-    
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: EdgeInsets.zero,
-        child: Stack(
-          children: [
-            PageView.builder(
-              itemCount: images.length,
-              controller: PageController(initialPage: _currentImageIndex),
-              onPageChanged: (index) {
-                setState(() => _currentImageIndex = index);
-              },
-              itemBuilder: (context, index) {
-                return InteractiveViewer(
-                  child: 
-Image.network(
-  fixImageUrl(images[index]),
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.broken_image, size: 64, color: Colors.grey[600]),
-                            const SizedBox(height: 8),
-                            Text('Failed to load image', style: TextStyle(color: Colors.grey[400])),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                );
-              },
-            ),
-            Positioned(
-              top: 40,
-              right: 20,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                onPressed: () => Navigator.pop(context),
+ void _showFullScreenGallery(BuildContext context) {
+  final images = _imageUrls;
+  if (images.isEmpty) return;
+  
+  // Create a local variable to track index inside the dialog
+  int localImageIndex = _currentImageIndex;
+  
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.zero,
+          child: Stack(
+            children: [
+              PageView.builder(
+                itemCount: images.length,
+                controller: PageController(initialPage: localImageIndex),
+                onPageChanged: (index) {
+                  setDialogState(() {
+                    localImageIndex = index;
+                  });
+                  // Also update parent state
+                  setState(() {
+                    _currentImageIndex = index;
+                  });
+                },
+                itemBuilder: (context, index) {
+                  return InteractiveViewer(
+                    child: Image.network(
+                      fixImageUrl(images[index]),
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.broken_image, size: 64, color: Colors.grey[600]),
+                              const SizedBox(height: 8),
+                              Text('Failed to load image', style: TextStyle(color: Colors.grey[400])),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
               ),
-            ),
-            Positioned(
-              bottom: 40,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '${_currentImageIndex + 1}/${images.length}',
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
+              Positioned(
+                top: 40,
+                right: 20,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              Positioned(
+                bottom: 40,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${localImageIndex + 1}/${images.length}',  // Use local variable
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+            ],
+          ),
+        );
+      },
+    ),
+  );
+}
   
   Widget _buildPlaceholderImage() {
     return Container(

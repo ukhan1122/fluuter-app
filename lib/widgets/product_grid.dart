@@ -21,10 +21,11 @@ class ProductGrid extends StatefulWidget {
 }
 
 class _ProductGridState extends State<ProductGrid> {
-  List<Product> _allProducts = [];
+   List<Product> _allProducts = [];
   List<Product> _displayProducts = [];
   bool _isLoading = true;
-  bool _showAllProducts = false;
+  int _visibleCount = 6;  // Changed: start with 6 products
+  bool _isLoadingMore = false;  // NEW: track loading state
   final ScrollController _productScrollController = ScrollController();
   final double _scrollAmount = 250.0;
   String? _errorMessage;
@@ -33,6 +34,7 @@ class _ProductGridState extends State<ProductGrid> {
   void initState() {
     super.initState();
     _loadProducts();
+  _productScrollController.addListener(_onHorizontalScrollEnd);
   }
 
   Future<void> _loadProducts() async {
@@ -76,10 +78,9 @@ class _ProductGridState extends State<ProductGrid> {
     }
   }
   
-  void _updateDisplayProducts() {
-    final limit = _showAllProducts ? _allProducts.length : 6;
+   void _updateDisplayProducts() {
     setState(() {
-      _displayProducts = _allProducts.take(limit).toList();
+      _displayProducts = _allProducts.take(_visibleCount).toList();
     });
   }
 
@@ -125,14 +126,17 @@ class _ProductGridState extends State<ProductGrid> {
     }
   }
 
-  @override
-  void dispose() {
-    _productScrollController.dispose();
-    super.dispose();
-  }
+@override
+void dispose() {
+  _productScrollController.removeListener(_onHorizontalScrollEnd);
+  _productScrollController.dispose();
+  super.dispose();
+}
 
   @override
   Widget build(BuildContext context) {
+    
+  print('Building ${widget.section} - Display products: ${_displayProducts.length}, Visible count: $_visibleCount, Total: ${_allProducts.length}');
     if (_isLoading) {
       return _buildLoadingSection();
     }
@@ -144,8 +148,7 @@ class _ProductGridState extends State<ProductGrid> {
     if (_allProducts.isEmpty) {
       return _buildEmptySection();
     }
-
-    final showArrows = widget.isHorizontal && !_showAllProducts;
+    final showArrows = widget.isHorizontal;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 20),
@@ -173,18 +176,52 @@ class _ProductGridState extends State<ProductGrid> {
           ),
           
           const SizedBox(height: 10),
-          
-          widget.isHorizontal && !_showAllProducts
+          widget.isHorizontal
               ? _buildHorizontalLayout(_displayProducts)
               : _buildVerticalGrid(_displayProducts),
           
-          if (_allProducts.length > 6)
-            _buildViewAllButton(),
+             // Only show Load More button for vertical layout (when category is selected)
+if (!widget.isHorizontal && _allProducts.length > _visibleCount)
+  _buildLoadMoreButton(),
         ],
       ),
     );
   }
 
+
+// Add this method to load more when scrolling horizontally
+void _onHorizontalScrollEnd() {
+  if (!widget.isHorizontal) return; // Only for horizontal
+  if (_isLoadingMore) return;
+  if (_visibleCount >= _allProducts.length) return;
+  
+  // Check if we're near the end of the scroll
+  final position = _productScrollController.position;
+  if (position.pixels >= position.maxScrollExtent - 100) {
+    _loadMoreHorizontal();
+  }
+}
+
+// Add this method to load more products for horizontal scroll
+Future<void> _loadMoreHorizontal() async {
+  if (_isLoadingMore) return;
+  if (_visibleCount >= _allProducts.length) return;
+  
+  setState(() {
+    _isLoadingMore = true;
+  });
+  
+  await Future.delayed(const Duration(milliseconds: 300));
+  
+  setState(() {
+    _visibleCount += 6;
+    if (_visibleCount > _allProducts.length) {
+      _visibleCount = _allProducts.length;
+    }
+    _displayProducts = _allProducts.take(_visibleCount).toList();
+    _isLoadingMore = false;
+  });
+}
   Widget _buildLoadingSection() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 20),
@@ -285,10 +322,10 @@ class _ProductGridState extends State<ProductGrid> {
             ),
             child: Column(
               children: [
-                Icon(Icons.shopping_bag_outlined, color: Colors.grey, size: 40),
+                Icon(Icons.shopping_bag_outlined, color: Colors.red, size: 40),
                 const SizedBox(height: 10),
                 Text(
-                  'No ${widget.section} products',
+                  '${widget.section} products are Coming',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.grey[700],
@@ -314,21 +351,51 @@ class _ProductGridState extends State<ProductGrid> {
         ),
       );
 
-  Widget _buildHorizontalLayout(List<Product> products) => SizedBox(
-        height: 250,
-        child: ListView.builder(
-          controller: _productScrollController,
-          scrollDirection: Axis.horizontal,
-          itemCount: products.length,
-          itemBuilder: (context, index) => Container(
-            margin: EdgeInsets.only(
-              left: index == 0 ? 16.0 : 8.0,
-              right: index == products.length - 1 ? 16.0 : 8.0,
+ Widget _buildHorizontalLayout(List<Product> products) => SizedBox(
+      height: 250,
+      child: Stack(
+        children: [
+          ListView.builder(
+            controller: _productScrollController,
+            scrollDirection: Axis.horizontal,
+            itemCount: products.length,
+            itemBuilder: (context, index) => Container(
+              margin: EdgeInsets.only(
+                left: index == 0 ? 16.0 : 8.0,
+                right: index == products.length - 1 ? 16.0 : 8.0,
+              ),
+              child: _buildProductCard(products[index]),
             ),
-            child: _buildProductCard(products[index]),
           ),
-        ),
-      );
+          if (_isLoadingMore && widget.isHorizontal)
+            Positioned(
+              right: 16,
+              top: 100,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 4,
+                    ),
+                  ],
+                ),
+                child: const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
 
   Widget _buildVerticalGrid(List<Product> products) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -359,7 +426,7 @@ class _ProductGridState extends State<ProductGrid> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: widget.isHorizontal && !_showAllProducts ? 150 : double.infinity,
+              width: widget.isHorizontal ? 150 : double.infinity,
               height: 150,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
@@ -370,7 +437,7 @@ class _ProductGridState extends State<ProductGrid> {
             const SizedBox(height: 8),
             
             SizedBox(
-              width: widget.isHorizontal && !_showAllProducts ? 150 : null,
+              width: widget.isHorizontal ? 150 : null,
               child: Text(
                 product.title,
                 style: const TextStyle(fontWeight: FontWeight.bold),
@@ -378,8 +445,7 @@ class _ProductGridState extends State<ProductGrid> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            
-            if (widget.isHorizontal && !_showAllProducts)
+            if (widget.isHorizontal)
               Text(
                 product.brandName ?? 'No Brand',
                 maxLines: 1,
@@ -445,41 +511,60 @@ class _ProductGridState extends State<ProductGrid> {
     );
   }
 
-  Widget _buildViewAllButton() {
-    if (!_showAllProducts) {
-      return Column(
-        children: [
-          const SizedBox(height: 10),
-          Center(
-            child: TextButton(
-              onPressed: () {
-                setState(() {
-                  _showAllProducts = true;
-                  _updateDisplayProducts();
-                });
-              },
-              child: const Text('View all →'),
-            ),
-          ),
-        ],
-      );
-    } else {
-      return Column(
-        children: [
-          const SizedBox(height: 10),
-          Center(
-            child: TextButton(
-              onPressed: () {
-                setState(() {
-                  _showAllProducts = false;
-                  _updateDisplayProducts();
-                });
-              },
-              child: const Text('Show less'),
-            ),
-          ),
-        ],
-      );
-    }
-  }
+
+ Widget _buildLoadMoreButton() {
+  return Column(
+    children: [
+      const SizedBox(height: 10),
+      Center(
+        child: _isLoadingMore
+            ? const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
+                  ),
+                ),
+              )
+            : TextButton(
+                onPressed: () async {
+                  print('Load More clicked for ${widget.section}');
+                  
+                  setState(() {
+                    _isLoadingMore = true;
+                  });
+                  
+                  await Future.delayed(const Duration(milliseconds: 300));
+                  
+                  setState(() {
+                    int newVisibleCount = _visibleCount + 6;
+                    if (newVisibleCount > _allProducts.length) {
+                      newVisibleCount = _allProducts.length;
+                    }
+                    _visibleCount = newVisibleCount;
+                    _displayProducts = _allProducts.take(_visibleCount).toList();
+                    _isLoadingMore = false;
+                  });
+                  
+                  // Auto-scroll to show new products
+                  await Future.delayed(const Duration(milliseconds: 100));
+                  if (_productScrollController.hasClients) {
+                    _productScrollController.animateTo(
+                      _productScrollController.position.maxScrollExtent,
+                      duration: const Duration(milliseconds: 500),
+                      curve: Curves.easeOut,
+                    );
+                  }
+                },
+                child: const Text('Load More →'),
+              ),
+        ),
+      
+    ],
+  );
+} 
+
 }

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/cart_item.dart';
-import '../../models/order.dart';
 import '../../providers/cart_provider.dart';
 import '../../services/api_service.dart';
 import 'package:provider/provider.dart';
-import '../../services/api_service.dart';
 import '../../utils/image_utils.dart';
+import 'package:uuid/uuid.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final List<CartItem> cartItems;
@@ -36,17 +36,53 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     super.dispose();
   }
 
+    @override
+  void initState() {
+    super.initState();
+    _clearInvalidGuestId();  // Clear old invalid guest ID on startup
+  }
+
   double get _subtotal => widget.cartItems.fold(0, (sum, item) => sum + item.totalPrice);
   double get _deliveryCharge => _deliveryOption == 'Standard Delivery' ? 200 : 
                                _deliveryOption == 'Express Delivery' ? 500 : 800;
   double get _total => _subtotal + _deliveryCharge;
+
+ 
+   Future<String> _getGuestId() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? guestId = prefs.getString('guest_id');
+    
+    // Check if existing guest ID is a valid UUID
+    final uuidRegex = RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+      caseSensitive: false,
+    );
+    
+    if (guestId != null && !uuidRegex.hasMatch(guestId)) {
+      print('⚠️ Invalid guest ID found: $guestId - generating new UUID');
+      guestId = null;
+      await prefs.remove('guest_id');
+    }
+    
+    if (guestId == null) {
+      guestId = _generateUuid();
+      await prefs.setString('guest_id', guestId);
+      print('✅ New guest ID generated: $guestId');
+    } else {
+      print('✅ Using existing guest ID: $guestId');
+    }
+    
+    return guestId;
+  }
+String _generateUuid() {
+  return const Uuid().v4();  // Generates proper UUID like "550e8400-e29b-41d4-a716-446655440000"
+}
 
   void _confirmOrder() {
     if (_formKey.currentState!.validate()) {
       showDialog(
         context: context,
         builder: (dialogContext) => AlertDialog(
-
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           title: const Row(
             children: [
@@ -88,178 +124,182 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
           actions: [
             TextButton(
-             onPressed: () => Navigator.pop(dialogContext),
-
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Review', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
-             onPressed: () async {
-
-  Navigator.pop(dialogContext); // ✅ close confirm dialog safely
-
-  if (!mounted) return;
-
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+                if (!mounted) return;
                 
-             // 🔥 Close keyboard first
-FocusScope.of(context).unfocus();
-
-// Small delay to let keyboard close smoothly
-await Future.delayed(const Duration(milliseconds: 200));
-
-// Show loading dialog
-BuildContext? loadingDialogContext;
-
-
-if (mounted) {
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (ctx) {
-      loadingDialogContext = ctx;   // ✅ store dialog context
-      return const AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Processing your order...'),
-          ],
-        ),
-      );
-    },
-  );
-}
-
-           
+                // Close keyboard first
+                FocusScope.of(context).unfocus();
+                await Future.delayed(const Duration(milliseconds: 200));
                 
-                // Prepare order items
-                final orderItems = widget.cartItems.map((item) {
-                  double itemPrice = 0;
-                  try {
-                    String priceStr = item.price.replaceAll('Rs.', '').replaceAll(',', '').trim();
-                    itemPrice = double.parse(priceStr);
-                  } catch (e) {
-                    print('Error parsing price: ${item.price}');
+                // Show loading dialog
+                BuildContext? loadingDialogContext;
+                if (mounted) {
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (ctx) {
+                      loadingDialogContext = ctx;
+                      return const AlertDialog(
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 16),
+                            Text('Processing your order...'),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                }
+                
+
+                             // Check if user is logged in FIRST
+                final prefs = await SharedPreferences.getInstance();
+                final token = prefs.getString('auth_token');
+                final isLoggedIn = token != null && token.isNotEmpty;
+                
+                print('🔐 Is user logged in: $isLoggedIn');
+                
+                int? addressId = null;  // Declare ONCE here
+                final sellerId = widget.cartItems.first.sellerId;  // Declare ONCE here
+                
+                if (isLoggedIn) {
+                  // ONLY logged-in users create address
+                  print('📝 Creating delivery address for logged-in user...');
+                  final addressResult = await ApiService.createAddress(
+                    address: _addressController.text.trim(),
+                    city: _cityController.text.trim(),
+                    phone: _phoneController.text.trim(),
+                  );
+                  
+                  if (!addressResult['success']) {
+                    if (mounted && loadingDialogContext != null) {
+                      Navigator.of(loadingDialogContext!).pop();
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Failed to save address. Please try again.')),
+                    );
+                    return;
+                  }
+                  addressId = addressResult['data']['id'];
+                  print('✅ Address created with ID: $addressId');
+                } else {
+                  // Guest users - skip address creation
+                  print('👤 Guest user - skipping address creation (address will be sent in guest_info)');
+                }
+                
+                print('👤 Seller ID: $sellerId');
+                
+                Map<String, dynamic> result;
+                
+                if (isLoggedIn) {
+                  // ===== AUTHENTICATED USER =====
+                  print('🔄 Using authenticated checkout...');
+                  
+                  // Sync cart items to backend
+                  for (var item in widget.cartItems) {
+                    await ApiService.addToCart(
+                      productId: item.productId,
+                      quantity: item.quantity,
+                    );
                   }
                   
-                  print('📦 Item: ${item.title}, ProductID: ${item.productId}, SellerID: ${item.sellerId}');
+                  await Future.delayed(const Duration(milliseconds: 500));
                   
-                  return {
-                    'product_id': item.productId,
-                    'product_title': item.title,
-                    'product_image': item.image,
-                    'price': itemPrice,
-                    'quantity': item.quantity,
-                    'total': itemPrice * item.quantity,
-                    'seller_id': item.sellerId,
-                  };
-                }).toList();
-                
-
-// First, create the delivery address
-print('📝 Creating delivery address...');
-final addressResult = await ApiService.createAddress(
-  address: _addressController.text.trim(),
-  city: _cityController.text.trim(),
-  phone: _phoneController.text.trim(),
-);
-
-if (!addressResult['success']) {
-  if (mounted && loadingDialogContext != null) {
-    Navigator.of(loadingDialogContext!).pop();
-  }
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Failed to save address. Please try again.')),
-  );
-  return;
-}
-final addressId = addressResult['data']['id'];
-print('✅ Address created with ID: $addressId');
-
-// Get seller ID from first cart item
-final sellerId = widget.cartItems.first.sellerId;
-print('👤 Seller ID: $sellerId');
-
-// ========== ADD THIS PART ==========
-// Sync cart items to backend
-print('🔄 Syncing cart with backend...');
-bool allAdded = true;
-
-for (var item in widget.cartItems) {
-  final productId = item.productId;  // It's already an integer
-  final added = await ApiService.addToCart(
-    productId: productId,
-    quantity: item.quantity,
-  );
-  print('Added product $productId (${item.title}): $added');
+                  final cartItemsForBackend = widget.cartItems.map((item) {
+                    return {
+                      'product_id': item.productId,
+                      'quantity': item.quantity,
+                    };
+                  }).toList();
+                  
+                result = await ApiService.createOrder(
+                    orderData: {
+                      'seller_id': sellerId,
+                      'delivery_address_id': addressId,
+                      'cart_items': cartItemsForBackend,
+                    },
+                  );
+                } else {
+  print('🔄 Using guest checkout...');
   
-  if (!added) {
-    allAdded = false;
-    break;
+  // Get or create guest ID
+  final guestId = await _getGuestId();
+  print('👤 Guest ID: $guestId');
+  
+  // ========== CRITICAL: Add products to guest cart FIRST ==========
+  print('📦 Adding products to guest cart...');
+  for (var item in widget.cartItems) {
+    final added = await ApiService.addToGuestCart(
+      guestId: guestId,
+      productId: item.productId,
+      quantity: item.quantity,
+    );
+    print('Added product ${item.productId} (${item.title}) to guest cart: $added');
   }
-}
-
-if (!allAdded) {
-  if (mounted && loadingDialogContext != null) {
-    Navigator.of(loadingDialogContext!).pop();
-  }
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Failed to sync cart. Please try again.')),
-  );
-  return;
-}
-
-// Wait for cart to update
-await Future.delayed(const Duration(milliseconds: 500));
-// ========== END OF ADDED PART ==========
-
-// Prepare cart items for backend
-final cartItemsForBackend = widget.cartItems.map((item) {
-  return {
-    'product_id': item.productId,  // Already an integer
-    'quantity': item.quantity,
-  };
-}).toList();
-
-print('📦 Cart items for backend: $cartItemsForBackend');
-
-// Create the order
-final result = await ApiService.createOrder(
-  orderData: {
+  
+  // Wait a moment for cart to sync
+  await Future.delayed(const Duration(milliseconds: 500));
+  // ========== END OF CRITICAL ADDITION ==========
+  
+  // Split full name into first and last name
+  final nameParts = _nameController.text.trim().split(' ');
+  final firstName = nameParts.first;
+  final lastName = nameParts.length > 1 ? nameParts.skip(1).join(' ') : '';
+  
+  // Prepare guest checkout payload
+  final guestPayload = {
+    'guest_info': {
+      'guest_id': guestId,
+      'email': _emailController.text.trim(),
+      'first_name': firstName,
+      'last_name': lastName,
+      'city': _cityController.text.trim(),
+      'address': _addressController.text.trim(),
+      'phone': _phoneController.text.trim(),
+      'subscribe': false,
+      'save_info': false,
+      'text_offers': false,
+    },
     'seller_id': sellerId,
-    'delivery_address_id': addressId,
-    'cart_items': cartItemsForBackend,
-  },
-);
-
-print('📦 Order result: $result');
-
-                
-                 if (mounted && loadingDialogContext != null) {
-  Navigator.of(loadingDialogContext!).pop();  
+    'cart_items': widget.cartItems.map((item) {
+      return {
+        'product_id': item.productId,
+        'quantity': item.quantity,
+      };
+    }).toList(),
+  };
+  
+  print('📦 Guest payload: $guestPayload');
+  
+  // Call guest checkout endpoint
+  result = await ApiService.createGuestOrder(guestPayload);
 }
-
-
                 
-               
+                print('📦 Order result: $result');
+                
+                if (mounted && loadingDialogContext != null) {
+                  Navigator.of(loadingDialogContext!).pop();
+                }
+                
                 await Future.delayed(const Duration(milliseconds: 100));
                 
-             
                 if (mounted) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (!mounted) return;
                     
-    if (result['success'] == true) {
-  // Clear the cart
-  final cartProvider = Provider.of<CartProvider>(context, listen: false);
-  cartProvider.clearCart();
-  
-  // Show success dialog with order data
-  print('🎉 Order successful! ID: ${result['data']['id']}');
-  _showOrderSuccessDialog(result['data']);
-}
-                else {
-                      // Show error message
+                    if (result['success'] == true) {
+                      final cartProvider = Provider.of<CartProvider>(context, listen: false);
+                      cartProvider.clearCart();
+                      print('🎉 Order successful! ID: ${result['data']['id']}');
+                      _showOrderSuccessDialog(result['data']);
+                    } else {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Row(
@@ -290,100 +330,117 @@ print('📦 Order result: $result');
       );
     }
   }
-void _showOrderSuccessDialog(Map<String, dynamic> orderData) {
-  if (!mounted) return;
+
+Future<void> _clearInvalidGuestId() async {
+  final prefs = await SharedPreferences.getInstance();
+  String? guestId = prefs.getString('guest_id');
   
-  // Helper function to convert to double safely
-  double toDouble(dynamic value) {
-    if (value == null) return 0.0;
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? 0.0;
-    return 0.0;
-  }
-  
-  final subtotal = toDouble(orderData['subtotal']) != 0 
-      ? toDouble(orderData['subtotal']) 
-      : _subtotal;
-      
-  final deliveryFee = toDouble(orderData['delivery_fee']) != 0 
-      ? toDouble(orderData['delivery_fee']) 
-      : _deliveryCharge;
-      
-  final totalAmount = toDouble(orderData['total_amount']) != 0 
-      ? toDouble(orderData['total_amount']) 
-      : _total;
-      
-  final trackingNo = orderData['tracking_no']?.toString() ?? '';
-  
-  print('🎉 Showing success dialog for order: $trackingNo');
-  
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext dialogContext) {
-      return AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 28),
-            SizedBox(width: 8),
-            Text('Order Confirmed!', style: TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.receipt_long, size: 60, color: Colors.green),
-            const SizedBox(height: 16),
-            Text(
-              'Tracking #${trackingNo.isNotEmpty ? trackingNo : 'N/A'}',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Your order has been placed successfully!',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                children: [
-                  _buildConfirmDetail('Subtotal', 'Rs.${subtotal.toStringAsFixed(0)}'),
-                  _buildConfirmDetail('Delivery Fee', 'Rs.${deliveryFee.toStringAsFixed(0)}'),
-                  const Divider(height: 16),
-                  _buildConfirmDetail('Total', 'Rs.${totalAmount.toStringAsFixed(0)}'),
-                  _buildConfirmDetail('Payment', _paymentMethod),
-                  _buildConfirmDetail('Delivery', _deliveryOption),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              if (mounted) {
-                Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Continue Shopping'),
-          ),
-        ],
-      );
-    },
+  // Check if it's a valid UUID
+  final uuidRegex = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    caseSensitive: false,
   );
+  
+  if (guestId != null && !uuidRegex.hasMatch(guestId)) {
+    print('⚠️ Clearing invalid guest ID: $guestId');
+    await prefs.remove('guest_id');
+  }
 }
+
+  void _showOrderSuccessDialog(Map<String, dynamic> orderData) {
+    if (!mounted) return;
+    
+    // Helper function to convert to double safely
+    double toDouble(dynamic value) {
+      if (value == null) return 0.0;
+      if (value is double) return value;
+      if (value is int) return value.toDouble();
+      if (value is String) return double.tryParse(value) ?? 0.0;
+      return 0.0;
+    }
+    
+    final subtotal = toDouble(orderData['subtotal']) != 0 
+        ? toDouble(orderData['subtotal']) 
+        : _subtotal;
+        
+    final deliveryFee = toDouble(orderData['delivery_fee']) != 0 
+        ? toDouble(orderData['delivery_fee']) 
+        : _deliveryCharge;
+        
+    final totalAmount = toDouble(orderData['total_amount']) != 0 
+        ? toDouble(orderData['total_amount']) 
+        : _total;
+        
+    final trackingNo = orderData['tracking_no']?.toString() ?? '';
+    
+    print('🎉 Showing success dialog for order: $trackingNo');
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green, size: 28),
+              SizedBox(width: 8),
+              Text('Order Confirmed!', style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.receipt_long, size: 60, color: Colors.green),
+              const SizedBox(height: 16),
+              Text(
+                'Tracking #${trackingNo.isNotEmpty ? trackingNo : 'N/A'}',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Your order has been placed successfully!',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  children: [
+                    _buildConfirmDetail('Subtotal', 'Rs.${subtotal.toStringAsFixed(0)}'),
+                    _buildConfirmDetail('Delivery Fee', 'Rs.${deliveryFee.toStringAsFixed(0)}'),
+                    const Divider(height: 16),
+                    _buildConfirmDetail('Total', 'Rs.${totalAmount.toStringAsFixed(0)}'),
+                    _buildConfirmDetail('Payment', _paymentMethod),
+                    _buildConfirmDetail('Delivery', _deliveryOption),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                if (mounted) {
+                  Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Continue Shopping'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   Widget _buildConfirmDetail(String label, String value) {
     return Padding(

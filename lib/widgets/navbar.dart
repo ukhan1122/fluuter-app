@@ -1,4 +1,6 @@
-import 'dart:async'; // Add this for Timer
+// lib/widgets/navbar.dart
+
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -7,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
 import '../models/offer.dart';
 import '../services/api_service.dart';
+import '../services/search_service.dart';
 import '../screens/auth/login.dart';
 import '../screens/auth/signup.dart';
 import '../screens/main/home_screen.dart';
@@ -19,23 +22,29 @@ import '../screens/product/my_listings_screen.dart';
 import '../screens/product/sold_items_screen.dart';
 import '../screens/product/received_offers_screen.dart';
 import '../screens/settings/bank_account_screen.dart';
+import '../screens/main/search_results_screen.dart';
 import '../utils/image_utils.dart';
 
 class CustomNavbar extends StatefulWidget implements PreferredSizeWidget {
   const CustomNavbar({super.key});
 
   @override
-  Size get preferredSize => const Size.fromHeight(60);
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
   @override
   State<CustomNavbar> createState() => _CustomNavbarState();
 }
 
 class _CustomNavbarState extends State<CustomNavbar> {
+  // User data
   String? _profilePicture;
   String? _userName;
   bool _isLoggedIn = false;
   int _unreadOfferCount = 0;
+  
+  // Search
+  final TextEditingController _searchController = TextEditingController();
+  bool _showSearch = false;
 
   @override
   void initState() {
@@ -49,6 +58,12 @@ class _CustomNavbarState extends State<CustomNavbar> {
     super.didChangeDependencies();
     _loadUserData();
     _loadUnreadOfferCount();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserData() async {
@@ -78,31 +93,22 @@ class _CustomNavbarState extends State<CustomNavbar> {
     }
   }
 
-Future<void> _loadUnreadOfferCount() async {
-  if (!_isLoggedIn) return;
-  
-  try {
-    print('🔄 Fetching unread offer count...');
+  Future<void> _loadUnreadOfferCount() async {
+    if (!_isLoggedIn) return;
     
-final offers = await ApiService.getReceivedOffers();
-    print('📊 Total offers received: ${offers.length}');
-    
-    final unreadCount = offers.where((offer) => 
-      offer.status == 'pending'
-    ).length;
-    
-    print('📊 Pending offers found: $unreadCount');
-    
-    if (mounted) {
-      setState(() {
-        _unreadOfferCount = unreadCount;
-      });
-      print('✅ Updated badge count to: $_unreadOfferCount');
+    try {
+      final offers = await ApiService.getReceivedOffers();
+      final unreadCount = offers.where((offer) => offer.status == 'pending').length;
+      
+      if (mounted) {
+        setState(() {
+          _unreadOfferCount = unreadCount;
+        });
+      }
+    } catch (e) {
+      print('Error loading unread offer count: $e');
     }
-  } catch (e) {
-    print('❌ Error loading unread offer count: $e');
   }
-}
 
   void _navigateToHome(BuildContext context) {
     Navigator.pushAndRemoveUntil(
@@ -120,7 +126,7 @@ final offers = await ApiService.getReceivedOffers();
       backgroundColor: Colors.white,
       elevation: 2,
       automaticallyImplyLeading: false,
-      leading: isMobile
+      leading: isMobile && !_showSearch
           ? Builder(
               builder: (context) => IconButton(
                 icon: const FaIcon(FontAwesomeIcons.bars, color: Colors.black),
@@ -128,25 +134,70 @@ final offers = await ApiService.getReceivedOffers();
               ),
             )
           : null,
-      title: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(builder: (context) => const HomeScreen()),
-              (route) => false,
+      title: _showSearch
+          ? Container(
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'Search products...',
+                  prefixIcon: const Icon(Icons.search, size: 20, color: Colors.grey),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.close, size: 20, color: Colors.grey),
+                    onPressed: () {
+                      setState(() {
+                        _showSearch = false;
+                        _searchController.clear();
+                      });
+                    },
+                  ),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+                onSubmitted: (query) {
+                  if (query.trim().isNotEmpty) {
+                    final results = SearchService.search(query);
+                    
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SearchResultsScreen(
+                          query: query,
+                          results: results,
+                        ),
+                      ),
+                    );
+                    
+                    setState(() {
+                      _showSearch = false;
+                      _searchController.clear();
+                    });
+                  }
+                },
+              ),
+            )
+          : GestureDetector(
+              onTap: () => _navigateToHome(context),
+              child: Image.asset('assets/logo.png', height: 40),
             ),
-            child: Image.asset('assets/logo.png', height: 40),
-          ),
-          if (!isMobile) ...[
-            const SizedBox(width: 20),
-            _menuItem('Home', () => _navigateToHome(context)),
-            _menuItem('Item 1', () {}),
-            _menuItem('Item 2', () {}),
-          ],
-        ],
-      ),
       actions: [
+        // Search icon
+        if (!_showSearch)
+          IconButton(
+            icon: const Icon(Icons.search, color: Colors.black87),
+            onPressed: () {
+              setState(() {
+                _showSearch = true;
+              });
+            },
+          ),
+        
+        // Cart icon with badge
         Consumer<CartProvider>(
           builder: (context, cartProvider, child) {
             final itemCount = cartProvider.totalQuantity;
@@ -157,21 +208,21 @@ final offers = await ApiService.getReceivedOffers();
                     context,
                     MaterialPageRoute(builder: (context) => const CartScreen()),
                   ),
-                  icon: const FaIcon(FontAwesomeIcons.cartShopping, color: Colors.red),
+                  icon: const Icon(Icons.shopping_cart_outlined, color: Colors.black87),
                 ),
                 if (itemCount > 0)
                   Positioned(
-                    right: 8,
-                    top: 8,
+                    right: 4,
+                    top: 4,
                     child: Container(
-                      padding: const EdgeInsets.all(4),
+                      padding: const EdgeInsets.all(2),
                       decoration: const BoxDecoration(
                         color: Colors.red,
                         shape: BoxShape.circle,
                       ),
                       constraints: const BoxConstraints(
-                        minWidth: 20,
-                        minHeight: 20,
+                        minWidth: 16,
+                        minHeight: 16,
                       ),
                       child: Text(
                         itemCount > 99 ? '99+' : itemCount.toString(),
@@ -188,7 +239,8 @@ final offers = await ApiService.getReceivedOffers();
             );
           },
         ),
-
+        
+        // Profile section (no login button - only shows when logged in)
         if (_isLoggedIn && _profilePicture != null && _profilePicture!.isNotEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
@@ -201,12 +253,9 @@ final offers = await ApiService.getReceivedOffers();
                 _loadUnreadOfferCount();
               }),
               child: CircleAvatar(
-                radius: 20,
+                radius: 18,
                 backgroundImage: NetworkImage(fixImageUrl(_profilePicture!)),
                 backgroundColor: Colors.grey[200],
-                child: _userName != null && _userName!.isNotEmpty
-                    ? null
-                    : const Icon(Icons.person, color: Colors.grey),
               ),
             ),
           )
@@ -222,41 +271,29 @@ final offers = await ApiService.getReceivedOffers();
                 _loadUnreadOfferCount();
               }),
               child: CircleAvatar(
-                radius: 20,
+                radius: 18,
                 backgroundColor: Colors.red,
-                child: _userName != null && _userName!.isNotEmpty && _userName!.length >= 1
+                child: _userName != null && _userName!.isNotEmpty
                     ? Text(
                         _userName![0].toUpperCase(),
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
+                          fontSize: 14,
                         ),
                       )
-                    : const Icon(Icons.person, color: Colors.white),
+                    : const Icon(Icons.person, size: 18, color: Colors.white),
               ),
             ),
-          )
-        else
-          TextButton(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const LoginScreen()),
-            ).then((_) {
-              _loadUserData();
-              _loadUnreadOfferCount();
-            }),
-            child: const Text('Login', style: TextStyle(color: Colors.red)),
           ),
+        
+        const SizedBox(width: 4),
       ],
     );
   }
-
-  Widget _menuItem(String text, VoidCallback onPressed) => TextButton(
-    onPressed: onPressed,
-    child: Text(text, style: const TextStyle(color: Colors.black)),
-  );
 }
 
+// ============= DRAWER (remains the same) =============
 class CustomDrawer extends StatefulWidget {
   const CustomDrawer({super.key});
 
@@ -348,14 +385,8 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
     if (!_isLoggedIn) return;
     
     try {
-      print('🔄 Fetching unread offer count...');
       final offers = await ApiService.getReceivedOffers();
-
-      final unreadCount = offers.where((offer) => 
-        offer.status == 'pending'
-      ).length;
-      
-      print('📊 Unread offers found: $unreadCount');
+      final unreadCount = offers.where((offer) => offer.status == 'pending').length;
       
       if (mounted) {
         setState(() {
@@ -363,23 +394,20 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
         });
       }
     } catch (e) {
-      print('❌ Error loading unread offer count: $e');
+      print('Error loading unread offer count: $e');
     }
   }
 
-  // ============ AUTH CHECK METHOD ============
   Future<void> _checkAuthAndNavigate(BuildContext context, Widget destination) async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('auth_token');
     
     if (token != null && token.isNotEmpty) {
-      // User is logged in, navigate to destination
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => destination),
       );
     } else {
-      // User is not logged in, show login dialog
       _showLoginRequiredDialog(context);
     }
   }
@@ -404,8 +432,7 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
                 MaterialPageRoute(builder: (_) => const LoginScreen()),
               );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red,
-    foregroundColor: Colors.white,),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
             child: const Text('Login'),
           ),
         ],
@@ -413,7 +440,6 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
     );
   }
 
-  // ============ NAVIGATION METHODS ============
   void _navigateToOverview(BuildContext context) {
     Navigator.pop(context);
     Navigator.push(
@@ -463,10 +489,10 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
 
   void _navigateToCreateListing(BuildContext context) {
     Navigator.pop(context);
-    _checkAuthAndNavigate(context, const CreateListingScreen());  // ← UPDATED
+    _checkAuthAndNavigate(context, const CreateListingScreen());
   }
 
-  void _navigateToProfile(BuildContext context, {int? tab}) {
+  void _navigateToProfile(BuildContext context) {
     Navigator.pop(context);
     Navigator.push(
       context,
@@ -478,7 +504,7 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
 
   void _navigateToFavorites(BuildContext context) {
     Navigator.pop(context);
-    _checkAuthAndNavigate(context, const FavoritesScreen());  // ← ADDED AUTH CHECK
+    _checkAuthAndNavigate(context, const FavoritesScreen());
   }
 
   void _navigateToCart(BuildContext context) {
@@ -546,7 +572,6 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
         color: Colors.white,
         child: Column(
           children: [
-            // ... your existing header code stays the same ...
             Container(
               width: double.infinity,
               decoration: BoxDecoration(
@@ -591,9 +616,9 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
                               child: CircleAvatar(
                                 radius: 35,
                                 backgroundColor: Colors.white,
-                              backgroundImage: _profilePicture != null && _profilePicture!.isNotEmpty
-    ? NetworkImage(fixImageUrl(_profilePicture!))
-    : null,
+                                backgroundImage: _profilePicture != null && _profilePicture!.isNotEmpty
+                                    ? NetworkImage(fixImageUrl(_profilePicture!))
+                                    : null,
                                 child: _profilePicture == null || _profilePicture!.isEmpty
                                     ? Text(
                                         _userName![0].toUpperCase(),
@@ -669,7 +694,6 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
                 ),
               ),
             ),
-
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -692,9 +716,8 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
                   _buildDrawerItem(
                     icon: Icons.add_circle_outline,
                     title: 'Sell Now',
-                    onTap: () => _navigateToCreateListing(context),  // ← UPDATED
+                    onTap: () => _navigateToCreateListing(context),
                     iconColor: Colors.green,
-                    
                   ),
                   _buildDrawerItem(
                     icon: Icons.shopping_bag_outlined,
@@ -706,7 +729,6 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
                     title: 'Sold Items',
                     onTap: () => _navigateToSoldItems(context),
                   ),
-                  
                   _buildDrawerItem(
                     icon: Icons.local_offer_outlined,
                     title: 'Offers',
@@ -760,18 +782,18 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
                     icon: Icons.help_outline,
                     title: 'Help Center',
                     onTap: () => _showComingSoon(context, 'Help Center'),
-                    iconColor: Colors.black,           // ← Icon color
+                    iconColor: Colors.black,
                   ),
                   _buildDrawerItem(
                     icon: Icons.message_outlined,
                     title: 'Contact Us',
-                    iconColor: Colors.black,           // ← Icon color
+                    iconColor: Colors.black,
                     onTap: () => _showComingSoon(context, 'Contact Us'),
                   ),
                   _buildDrawerItem(
                     icon: Icons.info_outline,
                     title: 'About',
-                    iconColor: Colors.black,           // ← Icon color
+                    iconColor: Colors.black,
                     onTap: () => _showComingSoon(context, 'About'),
                   ),
                   
@@ -834,7 +856,6 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
     required String title,
     required VoidCallback onTap,
     Color? iconColor,
-  Color? backgroundColor,  // ← ADD THIS LINE
     String? badge,
     Color? badgeColor,
   }) {
