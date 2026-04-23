@@ -21,7 +21,7 @@
   import 'api/bank_api.dart';      // ← ADD THIS
 
   // ============ PRODUCT CACHE CLASS ============
-  class ProductCache {
+  class ProductCache {  
     static List<Product>? _cachedProducts;
     static Future<List<Product>>? _loadingFuture;
     static bool _isLoading = false;
@@ -215,17 +215,20 @@
       return await AuthApi.forgotPassword(email: email);
     }
     
-    static Future<Map<String, dynamic>> setNewPassword({
-      required String token,
-      required String newPassword,
-      required String confirmPassword,
-    }) async {
-      return await AuthApi.setNewPassword(
-        token: token,
-        newPassword: newPassword,
-        confirmPassword: confirmPassword,
-      );
-    }
+   
+   static Future<Map<String, dynamic>> setNewPassword({
+  required String email,
+  required String token,
+  required String newPassword,
+  required String confirmPassword,
+}) async {
+  return await AuthApi.setNewPassword(
+    email: email,
+    token: token,
+    newPassword: newPassword,
+    confirmPassword: confirmPassword,
+  );
+}
     
     static Future<Map<String, dynamic>> logoutUser(String token) async {
       return await AuthApi.logout(token);
@@ -571,7 +574,7 @@ static Future<Map<String, dynamic>> createAddress({
       url,
       headers: AppConfig.getHeaders(),  // ← USE THIS to include Host header
       body: jsonEncode(guestPayload),
-    ).timeout(const Duration(seconds: 30));
+    ).timeout(const Duration(seconds: 90));
       
       print('📡 Guest Order Response Status: ${response.statusCode}');
       print('📡 Guest Order Response Body: ${response.body}');

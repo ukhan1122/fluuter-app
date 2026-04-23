@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 class SetNewPasswordScreen extends StatefulWidget {
   final String token;
+  final String email;  // ← ADD THIS
   
   const SetNewPasswordScreen({
     super.key,
     required this.token,
+    required this.email,  // ← ADD THIS
   });
 
   @override
@@ -48,7 +50,12 @@ class _SetNewPasswordScreenState extends State<SetNewPasswordScreen> {
     setState(() => _isLoading = true);
     
     try {
-      final result = await _authService.setNewPassword(widget.token, password, confirm);
+  final result = await _authService.setNewPassword(
+  email: widget.email,
+  token: widget.token,
+  newPassword: password,
+  confirmPassword: confirm,
+);
       
       if (result['success'] == true) {
         showDialog(

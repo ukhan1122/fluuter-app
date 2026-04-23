@@ -17,6 +17,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Future<void> _sendResetLink() async {
     final email = _emailController.text.trim();
     
+  // 🔴 ADD THIS LINE RIGHT HERE
+  print('🔴 BEFORE API CALL - Email: $email');
+    
     if (email.isEmpty || !email.contains('@')) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

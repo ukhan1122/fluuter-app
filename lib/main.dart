@@ -18,9 +18,11 @@ import 'screens/product/seller_profile_screen.dart';
 import 'screens/auth/signup_details_screen.dart';
 import 'screens/auth/signup_success_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  _initializeSearch();
+  
+  await Future.delayed(Duration(seconds: 3));
+  await _initializeSearch();  // ✅ WAIT for products to load
   runApp(const MyApp());
 }
 
@@ -86,15 +88,16 @@ class MyApp extends StatelessWidget {
                   );
                 }
                 
-                // Handle set-new-password
-                if (settings.name == '/set-new-password') {
-                  final args = settings.arguments as Map?;
-                  return MaterialPageRoute(
-                    builder: (context) => SetNewPasswordScreen(
-                      token: args?['token'] ?? '',
-                    ),
-                  );
-                }
+               // Handle set-new-password
+if (settings.name == '/set-new-password') {
+  final args = settings.arguments as Map?;
+  return MaterialPageRoute(
+    builder: (context) => SetNewPasswordScreen(
+      token: args?['token'] ?? '',
+      email: args?['email'] ?? '',  // ← ADD THIS LINE
+    ),
+  );
+}
                 
                 // Handle verify-otp
                 if (settings.name == '/verify-otp') {

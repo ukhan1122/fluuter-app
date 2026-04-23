@@ -233,7 +233,7 @@ String _generateUuid() {
   final guestId = await _getGuestId();
   print('👤 Guest ID: $guestId');
   
-  // ========== CRITICAL: Add products to guest cart FIRST ==========
+  // Add products to guest cart
   print('📦 Adding products to guest cart...');
   for (var item in widget.cartItems) {
     final added = await ApiService.addToGuestCart(
@@ -244,9 +244,7 @@ String _generateUuid() {
     print('Added product ${item.productId} (${item.title}) to guest cart: $added');
   }
   
-  // Wait a moment for cart to sync
   await Future.delayed(const Duration(milliseconds: 500));
-  // ========== END OF CRITICAL ADDITION ==========
   
   // Split full name into first and last name
   final nameParts = _nameController.text.trim().split(' ');
@@ -281,6 +279,8 @@ String _generateUuid() {
   // Call guest checkout endpoint
   result = await ApiService.createGuestOrder(guestPayload);
 }
+                
+              
                 
                 print('📦 Order result: $result');
                 
@@ -455,29 +455,30 @@ Future<void> _clearInvalidGuestId() async {
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String label, IconData icon) {
-    return TextFormField(
-      controller: controller,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: Colors.grey.shade600),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Colors.redAccent, width: 2),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+Widget _buildTextField(TextEditingController controller, String label, IconData icon, {TextInputType? keyboardType, String? Function(String?)? customValidator}) {
+  return TextFormField(
+    controller: controller,
+    keyboardType: keyboardType,
+    decoration: InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, color: Colors.grey.shade600),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.grey.shade300),
       ),
-      validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-    );
-  }
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Colors.redAccent, width: 2),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    ),
+    validator: customValidator ?? (v) => v == null || v.isEmpty ? 'Required' : null,
+  );
+}
 
   Widget _buildSection(String title, Widget child) {
     return Column(
@@ -660,11 +661,41 @@ Future<void> _clearInvalidGuestId() async {
               // Contact Information
               _buildSection('Contact Information', Column(
                 children: [
-                  _buildTextField(_nameController, 'Full Name', Icons.person_outline),
-                  const SizedBox(height: 12),
-                  _buildTextField(_phoneController, 'Phone Number', Icons.phone_outlined),
-                  const SizedBox(height: 12),
-                  _buildTextField(_emailController, 'Email Address', Icons.email_outlined),
+                  _buildTextField(
+  _nameController, 
+  'Full Name', 
+  Icons.person_outline,
+  customValidator: (v) {
+    if (v == null || v.isEmpty) return 'Full name is required';
+    if (v.trim().split(' ').length < 2) return 'Please enter both first and last name';
+    return null;
+  },
+),
+const SizedBox(height: 12),
+_buildTextField(
+  _phoneController, 
+  'Phone Number', 
+  Icons.phone_outlined,
+  keyboardType: TextInputType.phone,
+  customValidator: (v) {
+    if (v == null || v.isEmpty) return 'Phone number is required';
+    if (v.length < 10) return 'Enter a valid phone number';
+    return null;
+  },
+),
+const SizedBox(height: 12),
+_buildTextField(
+  _emailController, 
+  'Email Address', 
+  Icons.email_outlined,
+  keyboardType: TextInputType.emailAddress,
+  customValidator: (v) {
+    if (v == null || v.isEmpty) return 'Email is required';
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(v)) return 'Enter a valid email address';
+    return null;
+  },
+),
                 ],
               )),
 

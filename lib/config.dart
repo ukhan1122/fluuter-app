@@ -4,7 +4,7 @@ import 'dart:io' show Platform;
 
 class AppConfig {
   // FOR LOCAL DEVELOPMENT
-  static const bool forceLocal = true;
+  static const bool forceLocal = false;
   
   // Emulator URL
   static const String emulatorUrl = 'http://10.0.2.2';
@@ -18,11 +18,11 @@ class AppConfig {
   // Custom domain for iOS simulator/desktop
   static const String customDomain = 'http://depop-backend.test';
 
-  /// Get the base URL based on platform and environment
+  
   static String get baseUrl {
     if (forceLocal) {
       if (Platform.isAndroid) {
-        const bool isEmulator = true; // Set to false for real phone
+        const bool isEmulator = true; 
         
         if (isEmulator) {
           print('📱 Using emulator URL: $emulatorUrl');
@@ -46,18 +46,27 @@ class AppConfig {
     }
   }
 
-  /// Get headers with optional token and Host header
-  static Map<String, String> getHeaders({String? token, bool includeHost = true}) {
+  /// Check if we need to add the Host header (only for local development)
+  static bool get needsHostHeader {
+    // Only add Host header for local development
+    return !forceLocal || 
+           (baseUrl.contains('10.0.2.2') || 
+            baseUrl.contains('localhost') || 
+            baseUrl.contains('depop-backend.test'));
+  }
+
+  /// Get headers with optional token - WORKS FOR ALL ENVIRONMENTS
+  static Map<String, String> getHeaders({String? token}) {
     final headers = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
       'ngrok-skip-browser-warning': 'true',
     };
     
-    // Add Host header for local development when not using ngrok
-    if (includeHost && !baseUrl.contains('ngrok') && baseUrl.contains('10.0.2.2')) {
+    // ✅ Automatically add Host header only when needed
+    if (needsHostHeader && !baseUrl.contains('railway.app') && !baseUrl.contains('ngrok')) {
       headers['Host'] = 'depop-backend.test';
-      print('📝 Using Host header for local connection');
+      print('📝 Adding Host header for local development');
     }
     
     if (token != null && token.isNotEmpty) {
@@ -67,16 +76,17 @@ class AppConfig {
     return headers;
   }
 
-  /// For multipart requests (file uploads)
-  static Map<String, String> getMultipartHeaders({String? token, bool includeHost = true}) {
+  /// For multipart requests (file uploads) - WORKS FOR ALL ENVIRONMENTS
+  static Map<String, String> getMultipartHeaders({String? token}) {
     final headers = {
       'Accept': 'application/json',
       'ngrok-skip-browser-warning': 'true',
     };
     
-    // Add Host header for local development when not using ngrok
-    if (includeHost && !baseUrl.contains('ngrok') && baseUrl.contains('10.0.2.2')) {
+    // ✅ Automatically add Host header only when needed
+    if (needsHostHeader && !baseUrl.contains('railway.app') && !baseUrl.contains('ngrok')) {
       headers['Host'] = 'depop-backend.test';
+      print('📝 Adding Host header for local development (multipart)');
     }
     
     if (token != null && token.isNotEmpty) {

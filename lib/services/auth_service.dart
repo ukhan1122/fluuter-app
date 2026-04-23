@@ -135,33 +135,38 @@ Future<Map<String, dynamic>> login(String login, String password) async {
     }
   }
   
-  // ✅ ADD THIS METHOD - Set New Password
-  Future<Map<String, dynamic>> setNewPassword(String token, String newPassword, String confirmPassword) async {
-    try {
-      print('🔐 Setting new password');
-      
-      final response = await ApiService.setNewPassword(
-        token: token,
-        newPassword: newPassword,
-        confirmPassword: confirmPassword,
-      );
-      
-      if (response['success'] == true) {
-        return {
-          'success': true,
-          'message': 'Password updated successfully'
-        };
-      }
-      
+  Future<Map<String, dynamic>> setNewPassword({
+  required String email,
+  required String token,
+  required String newPassword,
+  required String confirmPassword,
+}) async {
+  try {
+    print('🔐 Setting new password for email: $email');
+    
+    final response = await ApiService.setNewPassword(
+      email: email,
+      token: token,
+      newPassword: newPassword,
+      confirmPassword: confirmPassword,
+    );
+    
+    if (response['success'] == true) {
       return {
-        'success': false,
-        'error': response['error'] ?? 'Failed to update password'
+        'success': true,
+        'message': 'Password updated successfully'
       };
-    } catch (e) {
-      print('❌ Set new password error: $e');
-      return {'success': false, 'error': 'Connection error: $e'};
     }
+    
+    return {
+      'success': false,
+      'error': response['error'] ?? 'Failed to update password'
+    };
+  } catch (e) {
+    print('❌ Set new password error: $e');
+    return {'success': false, 'error': 'Connection error: $e'};
   }
+}
   
   // ✅ ADD THIS METHOD - Verify OTP
   Future<Map<String, dynamic>> verifyOTP(String phone, String otp) async {

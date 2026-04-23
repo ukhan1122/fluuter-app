@@ -1082,6 +1082,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       ),
     );
   }
+
 Future<void> _submitListing() async {
   if (_formKey.currentState!.validate()) {
     _formKey.currentState!.save();
@@ -1091,11 +1092,6 @@ Future<void> _submitListing() async {
       _showSnackBar('Please login first', Colors.red);
       return;
     }
-    
-    // DEBUG: Print the base URL and endpoint
-    print('🔍 Base URL: ${ApiService.baseUrl}');
-    print('🔍 Full endpoint: ${ApiService.baseUrl}/api/v1/listing/auth/products/create');
-    print('🔍 Auth token: ${_authToken?.substring(0, min(20, _authToken!.length))}...');
     
     if (_city.isEmpty) {
       _showSnackBar('Please select a city', Colors.red);
@@ -1112,6 +1108,27 @@ Future<void> _submitListing() async {
       return;
     }
     
+    if (_selectedImages.length < 2) {
+      _showSnackBar('Please add at least 2 images (minimum required by backend)', Colors.orange);
+      return;
+    }
+    
+    // Check location length (backend requires max 20 characters)
+    String locationText = _addressLine1;
+    if (locationText.length > 20) {
+      // Show warning and truncate
+      _showSnackBar('Location will be shortened from ${locationText.length} to 20 chars', Colors.orange);
+      locationText = locationText.substring(0, 20);
+      print('✂️ Location truncated to: $locationText');
+    }
+    
+    // Ensure size has a value (backend might require it)
+    String sizeValue = _standardSize;
+    if (sizeValue.isEmpty) {
+      sizeValue = 'M'; // Default size
+      print('📏 Size was empty, set to default: M');
+    }
+    
     setState(() => _isSubmitting = true);
     
     // Convert images to file paths
@@ -1125,45 +1142,62 @@ Future<void> _submitListing() async {
     try {
       String? addressId;
       
-   // Replace your current address creation with this:
-try {
-  final addressData = {
-    'address_line_1': _addressLine1,
-    'address_line_2': _addressLine2.isEmpty ? '' : _addressLine2,
-    'city': _city,
-    'state_province_or_region': _state,
-    'zip_or_postal_code': _zipCode,
-    'country': _country,
-    'address_type': 'pickup',
-  };
-  
-  print('🏠 Creating address with data: $addressData');
-  print('📡 Full URL: ${ApiService.baseUrl}/api/v1/user/address');
-  
- final addressResponse = await http.post(
-  Uri.parse('${ApiService.baseUrl}/api/v1/user/address'),
-  headers: AppConfig.getHeaders(token: _authToken),
-  body: jsonEncode(addressData),
-).timeout(const Duration(seconds: 15));
-  
-  print('📡 Address Response Status: ${addressResponse.statusCode}');
-  print('📡 Address Response Body: ${addressResponse.body}');
-  
-  if (addressResponse.statusCode == 200 || addressResponse.statusCode == 201) {
-    final addressResult = json.decode(addressResponse.body);
-    addressId = addressResult['data']?['id']?.toString() ?? 
-                addressResult['id']?.toString();
-    print('✅ Address created with ID: $addressId');
-  } else if (addressResponse.statusCode == 422) {
-    // Validation error
-    final errorData = json.decode(addressResponse.body);
-    print('❌ Validation errors: ${errorData['errors']}');
-  }
-} catch (e) {
-  print('⚠️ Address creation error: $e');
-}
+      // Create address
+      try {
+        final addressData = {
+          'address_line_1': _addressLine1,
+          'address_line_2': _addressLine2.isEmpty ? '' : _addressLine2,
+          'city': _city,
+          'state_province_or_region': _state,
+          'zip_or_postal_code': _zipCode,
+          'country': _country,
+          'address_type': 'pickup',
+        };
+        
+        print('🏠 Creating address with data: $addressData');
+        
+        final addressResponse = await http.post(
+          Uri.parse('${ApiService.baseUrl}/api/v1/user/address'),
+          headers: AppConfig.getHeaders(token: _authToken),
+          body: jsonEncode(addressData),
+        ).timeout(const Duration(seconds: 15));
+        
+        print('📡 Address Response Status: ${addressResponse.statusCode}');
+        print('📡 Address Response Body: ${addressResponse.body}');
+        
+        if (addressResponse.statusCode == 200 || addressResponse.statusCode == 201) {
+          final addressResult = json.decode(addressResponse.body);
+          addressId = addressResult['data']?['id']?.toString() ?? 
+                      addressResult['id']?.toString();
+          print('✅ Address created with ID: $addressId');
+        } else if (addressResponse.statusCode == 422) {
+          final errorData = json.decode(addressResponse.body);
+          final errors = errorData['errors'] as Map<String, dynamic>?;
+          
+          // Build user-friendly error message
+          StringBuffer errorMsg = StringBuffer('Address validation failed:\n');
+          errors?.forEach((field, messages) {
+            errorMsg.writeln('• ${_getFieldName(field)}: ${messages[0] ?? messages}');
+          });
+          
+          _showSnackBar(errorMsg.toString(), Colors.red);
+          setState(() => _isSubmitting = false);
+          return;
+        }
+      } catch (e) {
+        print('⚠️ Address creation error: $e');
+        _showSnackBar('Failed to create address: $e', Colors.red);
+        setState(() => _isSubmitting = false);
+        return;
+      }
       
-      // 2. Create listing
+      if (addressId == null || addressId.isEmpty) {
+        _showSnackBar('Failed to create address. Please try again.', Colors.red);
+        setState(() => _isSubmitting = false);
+        return;
+      }
+      
+      // Create listing data
       final Map<String, dynamic> listingData = {
         'title': _title,
         'description': _description,
@@ -1172,43 +1206,20 @@ try {
         'category_id': _categoryId,
         'brand_name': _brandName,
         'condition_id': _conditionId,
-        'size': _standardSize,
+        'size': sizeValue,  // Use the validated size value
         'allow_offers': _allowOffers,
         'city': _city,
-        'location': _addressLine1,
+        'location': locationText,  // Use truncated location
         'shipping_type': _shippingType,
         'active': true,
         'sold': false,
+        'address_id': addressId,
       };
       
-      // Add address_id if available
-      if (addressId != null && addressId.isNotEmpty) {
-        listingData['address_id'] = addressId;
-      }
-      
-      // Add detailed measurements if available
-      if (_chestController.text.isNotEmpty) {
-        listingData['chest_size'] = _chestController.text;
-      }
-      if (_waistController.text.isNotEmpty) {
-        listingData['waist_size'] = _waistController.text;
-      }
-      if (_hipsController.text.isNotEmpty) {
-        listingData['hips_size'] = _hipsController.text;
-      }
-      if (_inseamController.text.isNotEmpty) {
-        listingData['inseam_size'] = _inseamController.text;
-      }
-      if (_sleeveController.text.isNotEmpty) {
-        listingData['sleeve_size'] = _sleeveController.text;
-      }
-      if (_shoulderController.text.isNotEmpty) {
-        listingData['shoulder_size'] = _shoulderController.text;
-      }
-      
       print('📤 Creating listing with data: $listingData');
+      print('📸 Images received: ${imagePaths.length}');
       
-      // 3. Submit listing
+      // Submit listing
       final result = await ApiService.createListing(
         token: _authToken!,
         listingData: listingData,
@@ -1219,39 +1230,50 @@ try {
       
       print('📥 Listing creation result: $result');
       
-      // Check if it's an SMTP error (listing was created but email failed)
-      if (result['raw_response'] != null) {
-        final rawResponse = result['raw_response'];
-        if (rawResponse is Map) {
-          final message = rawResponse['message']?.toString() ?? '';
-          
-          // Check if it's an SMTP authentication error
-          if (message.contains('SMTP') || 
-              message.contains('authenticate') || 
-              message.contains('contact@dexktech.com')) {
-            // This means the listing was created but email notification failed
-            print('⚠️ Listing created but email notification failed (SMTP issue)');
-            _showSnackBar('Listing created successfully! (Email notification failed)', Colors.orange);
-            Navigator.pop(context);
-            return;
-          }
+      // Check if successful
+      if (result['success'] == true) {
+        ProductCache.clearCache();
+        _showSnackBar('Listing created successfully!', Colors.green);
+        Navigator.pop(context, true);
+      } else {
+        // Show the actual error from backend
+        String errorMessage = result['error'] ?? result['message'] ?? 'Failed to create listing';
+        
+        // Check if there are validation errors
+        if (result['validationErrors'] != null) {
+          final errors = result['validationErrors'] as Map<String, dynamic>;
+          StringBuffer detailedError = StringBuffer('Please fix:\n');
+          errors.forEach((field, messages) {
+            detailedError.writeln('• ${_getFieldName(field)}: ${messages[0] ?? messages}');
+          });
+          errorMessage = detailedError.toString();
         }
-      }
-      
-    if (result['success'] == true || result['status'] == 'success') {
-  // Clear the product cache so new product appears in search
-  ProductCache.clearCache();
-  
-  _showSnackBar('Listing created successfully!', Colors.green);
-  Navigator.pop(context);
-}
-     else {
-        String errorMessage = result['message'] ?? 'Failed to create listing';
-        if (result['errors'] != null) {
-          final errors = result['errors'] as Map<String, dynamic>;
-          errorMessage += '\nErrors: ${errors.values.join(', ')}';
-        }
-        _showSnackBar(errorMessage, Colors.red);
+        
+        // Show error in a dialog for better visibility
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.red),
+                SizedBox(width: 8),
+                Text('Cannot Create Listing'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Text(
+                errorMessage,
+                style: TextStyle(fontSize: 14),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('OK'),
+              ),
+            ],
+          ),
+        );
       }
     } catch (e) {
       setState(() => _isSubmitting = false);
@@ -1260,4 +1282,26 @@ try {
     }
   }
 }
+
+// Helper method to get user-friendly field names
+String _getFieldName(String field) {
+  final names = {
+    'title': 'Title',
+    'description': 'Description',
+    'price': 'Price',
+    'quantity': 'Quantity',
+    'category_id': 'Category',
+    'brand_name': 'Brand',
+    'condition_id': 'Condition',
+    'size': 'Size',
+    'location': 'Location (max 20 chars)',
+    'city': 'City',
+    'shipping_type': 'Shipping Type',
+    'address_id': 'Address',
+    'images': 'Images',
+  };
+  return names[field] ?? field;
+}
+
+
 }

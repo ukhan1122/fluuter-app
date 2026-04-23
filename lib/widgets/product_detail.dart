@@ -104,98 +104,125 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }).toList();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
+ @override
+Widget build(BuildContext context) {
+  // Get responsive values based on screen size
+  final screenHeight = MediaQuery.of(context).size.height;
+  final bottomPadding = MediaQuery.of(context).padding.bottom;
+  
+  // Calculate dynamic bottom padding based on screen height
+  double getBottomPadding() {
+    if (screenHeight < 700) {
+      return 80 + bottomPadding; // Small screens (Infinix)
+    } else if (screenHeight < 800) {
+      return 90 + bottomPadding; // Medium screens
+    } else {
+      return 100 + bottomPadding; // Large screens (Pixel 6a)
+    }
+  }
+  
+  return Scaffold(
+    backgroundColor: Colors.white,
+    appBar: AppBar(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black87),
-        title: Text(
-          widget.title, 
-          style: const TextStyle(
-            color: Colors.black87,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+      elevation: 0,
+      iconTheme: const IconThemeData(color: Colors.black87),
+      title: Text(
+        widget.title, 
+        style: const TextStyle(
+          color: Colors.black87,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.share_outlined, color: Colors.black87),
-            onPressed: () {},
-          ),
-        ],
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildImageGallery(),
-                  
-                  const SizedBox(height: 16),
-                  
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildProductHeader(),
-                        
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.share_outlined, color: Colors.black87),
+          onPressed: () {},
+        ),
+      ],
+    ),
+    body: Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildImageGallery(),
+                
+                const SizedBox(height: 16),
+                
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildProductHeader(),
+                      
+                      const SizedBox(height: 16),
+                      
+                      _buildStatusTags(),
+                      
+                      if (widget.product.location != null || widget.product.city != null) ...[
                         const SizedBox(height: 16),
-                        
-                        _buildStatusTags(),
-                        
-                        if (widget.product.location != null || widget.product.city != null) ...[
-                          const SizedBox(height: 16),
-                          _buildLocation(),
-                        ],
-                        
-                        const SizedBox(height: 24),
-                        
-                        _buildDescription(),
-                        
-                        const SizedBox(height: 24),
-                        
-                        _buildCondition(),
-                        
-                        if (_sizeDetails.isNotEmpty) ...[
-                          const SizedBox(height: 24),
-                          _buildSizeSection(),
-                        ],
-                        
-                        const SizedBox(height: 24),
-                        
-                        if (widget.product.user.isNotEmpty) _buildSellerSection(),
-                        
-                        const SizedBox(height: 32),
-                        
-                        ProductGrid(
-                          section: widget.category, 
-                          customTitle: 'You May Also Like',
-                          isHorizontal: false,
-                        ),
-                        
-                        const SizedBox(height: 100),
+                        _buildLocation(),
                       ],
-                    ),
+                      
+                      const SizedBox(height: 24),
+                      
+                      _buildDescription(),
+                      
+                      const SizedBox(height: 24),
+                      
+                      _buildCondition(),
+                      
+                      if (_sizeDetails.isNotEmpty) ...[
+                        const SizedBox(height: 24),
+                        _buildSizeSection(),
+                      ],
+                      
+                      const SizedBox(height: 24),
+                      
+                      if (widget.product.user.isNotEmpty) _buildSellerSection(),
+                      
+                      const SizedBox(height: 32),
+                      
+                      // FIXED: Add constraints to ProductGrid to prevent overflow
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          return Container(
+                            constraints: BoxConstraints(
+                              minHeight: 200, // Minimum height for the grid
+                              maxHeight: constraints.maxHeight * 0.8, // Don't exceed 80% of available space
+                            ),
+                            child: ProductGrid(
+                              section: widget.category, 
+                              customTitle: 'You May Also Like',
+                              isHorizontal: false,
+                            ),
+                          );
+                        },
+                      ),
+                      
+                      // Dynamic bottom padding based on screen size
+                      SizedBox(height: getBottomPadding()),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-          
-          _buildActionButtons(),
-        ],
-      ),
-    );
-  }
+        ),
+        
+        _buildActionButtons(),
+      ],
+    ),
+  );
+}
   
   Widget _buildImageGallery() {
     final images = _imageUrls;
@@ -1804,7 +1831,7 @@ Future<Map<String, dynamic>> _makeOffer({
   }
 }
 
- Widget _buildActionButtons() {
+Widget _buildActionButtons() {
   final bool isOutOfStock = widget.product.sold || widget.product.quantityLeft <= 0;
   
   return Container(
@@ -1815,18 +1842,13 @@ Future<Map<String, dynamic>> _makeOffer({
     ),
     child: Consumer<CartProvider>(
       builder: (context, cartProvider, child) {
-        // ✅ CHECK HOW MANY OF THIS PRODUCT ARE ALREADY IN CART
         final int quantityInCart = cartProvider.cartItems
             .where((item) => item.productId == widget.product.id)
             .fold(0, (sum, item) => sum + item.quantity);
         
-        // ✅ CALCULATE REMAINING QUANTITY AVAILABLE
         final int remainingQuantity = widget.product.quantityLeft - quantityInCart;
-        
-        // ✅ DETERMINE IF BUTTON SHOULD BE DISABLED
         final bool isButtonDisabled = isOutOfStock || remainingQuantity <= 0;
         
-        // ✅ BUTTON TEXT
         String buttonText = '';
         if (isOutOfStock) {
           buttonText = 'Out of Stock';
@@ -1837,106 +1859,106 @@ Future<Map<String, dynamic>> _makeOffer({
         }
         
         return Column(
+          mainAxisSize: MainAxisSize.min, // Important: Don't take more space than needed
           children: [
-            ElevatedButton(
-              onPressed: isButtonDisabled 
-                  ? null
-                  : () {
-                      final images = _imageUrls;
-                      
-                      // ✅ ONLY ADD ONE AT A TIME
-                      cartProvider.addToCart(CartItem(
-                        productId: widget.product.id,
-                        sellerId: widget.product.userId,
-                        title: widget.title,
-                        image: images.isNotEmpty ? images.first : '',
-                        price: widget.price,
-                        quantity: 1,
-                      ));
-                      
-                      // ✅ SHOW MESSAGE WITH REMAINING QUANTITY
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.check_circle, color: Colors.green, size: 20),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        'Added to cart',
-                                        style: TextStyle(
-                                          color: Colors.grey[800],
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      if (remainingQuantity - 1 > 0)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: isButtonDisabled 
+                    ? null
+                    : () {
+                        final images = _imageUrls;
+                        cartProvider.addToCart(CartItem(
+                          productId: widget.product.id,
+                          sellerId: widget.product.userId,
+                          title: widget.title,
+                          image: images.isNotEmpty ? images.first : '',
+                          price: widget.price,
+                          quantity: 1,
+                        ));
+                        
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
                                         Text(
-                                          '${remainingQuantity - 1} left in stock',
+                                          'Added to cart',
                                           style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 11,
+                                            color: Colors.grey[800],
+                                            fontSize: 14,
                                           ),
                                         ),
-                                    ],
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: () {
-                                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                    Navigator.push(
-                                      context,
-                                      
-MaterialPageRoute(builder: (context) => CartScreen()),
-                                    );
-                                  },
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: Colors.red,
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    minimumSize: Size.zero,
-                                  ),
-                                  child: const Text(
-                                    'VIEW',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
+                                        if (remainingQuantity - 1 > 0)
+                                          Text(
+                                            '${remainingQuantity - 1} left in stock',
+                                            style: TextStyle(
+                                              color: Colors.grey[600],
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ),
-                                ),
-                              ],
+                                  TextButton(
+                                    onPressed: () {
+                                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (context) => CartScreen()),
+                                      );
+                                    },
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: Colors.red,
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      minimumSize: Size.zero,
+                                    ),
+                                    child: const Text(
+                                      'VIEW',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
+                            backgroundColor: Colors.white,
+                            behavior: SnackBarBehavior.floating,
+                            margin: const EdgeInsets.all(16),
+                            padding: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: BorderSide(color: Colors.grey[200]!),
+                            ),
+                            duration: const Duration(seconds: 2),
                           ),
-                          backgroundColor: Colors.white,
-                          behavior: SnackBarBehavior.floating,
-                          margin: const EdgeInsets.all(16),
-                          padding: EdgeInsets.zero,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            side: BorderSide(color: Colors.grey[200]!),
-                          ),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isButtonDisabled ? Colors.grey : Colors.red,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                        );
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isButtonDisabled ? Colors.grey : Colors.red,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  elevation: 0,
                 ),
-                elevation: 0,
-              ),
-              child: Text(
-                buttonText,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
+                child: Text(
+                  buttonText,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
                 ),
               ),
             ),

@@ -301,7 +301,7 @@ class _LoginScreenState extends State<LoginScreen> {
               textInputAction: TextInputAction.next,
               style: const TextStyle(fontSize: 16),
               decoration: InputDecoration(
-                hintText: 'explain816 or user@gmail.com',
+                hintText: 'User@gmail.com',
                 hintStyle: TextStyle(color: Colors.grey.shade400),
                 prefixIcon: Icon(
                   Icons.person_outline,

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../../../models/product.dart';
 import '../../../services/api_service.dart';
 import '../../../utils/image_utils.dart';
+import '../../../config.dart';
 
 class EditProductDialog extends StatefulWidget {
   final Product product;
@@ -91,12 +92,7 @@ Future<void> _saveChanges() async {
     
     final response = await http.put(
       updateUrl,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-        'Host': 'depop-backend.test',
-      },
+   headers: AppConfig.getHeaders(token: token), // ✅ One line, works everywhere!
       body: json.encode(updateData),
     ).timeout(const Duration(seconds: 15));
     
@@ -112,9 +108,8 @@ Future<void> _saveChanges() async {
           Uri.parse('${ApiService.baseUrl}/api/v1/listing/auth/products/${widget.product.id}/photos'),
         );
         
-        request.headers['Accept'] = 'application/json';
-        request.headers['Authorization'] = 'Bearer $token';
-        request.headers['Host'] = 'depop-backend.test';
+        
+request.headers.addAll(AppConfig.getMultipartHeaders(token: token));
         
         for (int i = 0; i < newImages.length; i++) {
           var file = newImages[i];

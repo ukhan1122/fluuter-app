@@ -65,44 +65,54 @@ class AuthApi {
   }
   
   static Future<Map<String, dynamic>> forgotPassword({required String email}) async {
+    
+  print('🔴 AUTH_API - Forgot password called with email: $email');
     try {
       final response = await ApiClient.post(
         '/api/v1/auth/forgot-password',
         body: {'email': email},
       );
       
+    print('🔴 AUTH_API - Response status: ${response.statusCode}');  // ← ALSO ADD THIS
+      
       if (response.statusCode == 200) {
         return {'success': true, 'data': ApiClient.parseResponse(response)};
       }
       return {'success': false, 'error': 'Failed to send reset link'};
     } catch (e) {
+      
+    print('🔴 AUTH_API - Error: $e');  // ← AND THIS
       return {'success': false, 'error': e.toString()};
     }
   }
   
-  static Future<Map<String, dynamic>> setNewPassword({
-    required String token,
-    required String newPassword,
-    required String confirmPassword,
-  }) async {
-    try {
-      final response = await ApiClient.post(
-        '/api/v1/auth/set-new-password',
-        body: {
-          'token': token,
-          'new_password': newPassword,
-          'confirm_password': confirmPassword,
-        },
-      );
-      
-      if (response.statusCode == 200) {
-        return {'success': true, 'data': ApiClient.parseResponse(response)};
-      }
-      return {'success': false, 'error': 'Failed to set password'};
-    } catch (e) {
-      return {'success': false, 'error': e.toString()};
+ 
+ static 
+ Future<Map<String, dynamic>> setNewPassword({
+  required String email,      // ← ADD THIS PARAMETER
+  required String token,
+  required String newPassword,
+  required String confirmPassword,
+}) async {
+  try {
+    final response = await ApiClient.post(
+      '/api/v1/auth/set-new-password',
+      body: {
+        'email': email,        // ← ADD THIS FIELD
+        'token': token,
+        'password': newPassword,              // ← CHANGE from 'new_password'
+        'password_confirmation': confirmPassword,  // ← CHANGE from 'confirm_password'
+      },
+    );
+    
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': ApiClient.parseResponse(response)};
     }
+    return {'success': false, 'error': 'Failed to set password'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
   }
+}
   
   static Future<Map<String, dynamic>> logout(String token) async {
     try {
