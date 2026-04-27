@@ -275,7 +275,7 @@
         final token = authService.token;
         final response = await http.get(
           Uri.parse('$baseUrl/api/v1/shop/$sellerId/shop'),
-          headers: _headersWithToken(token),
+          headers: AppConfig.getHeaders(token: token),
         ).timeout(const Duration(seconds: 10));
         if (response.statusCode == 200) {
           return {'success': true, 'data': json.decode(response.body)['data'] ?? json.decode(response.body)};
@@ -302,13 +302,18 @@
       return await UserApi.getUserStats(token);
     }
     
-    static Future<bool> followUser(String userId) async {
-      final authService = AuthService();
-      await authService.isLoggedIn();
-      final token = authService.token;
-      if (token == null) return false;
-      return await UserApi.followUser(userId, token);
-    }
+  static Future<bool> followUser(String userId) async {
+  print('🔍 ApiService.followUser called with userId: $userId');
+  final authService = AuthService();
+  await authService.isLoggedIn();
+  final token = authService.token;
+  print('🔑 Token: ${token != null ? "exists" : "null"}');
+  if (token == null) return false;
+  print('📡 Calling UserApi.followUser...');
+  final result = await UserApi.followUser(userId, token);
+  print('📡 Result: $result');
+  return result;
+}
     
     static Future<bool> unfollowUser(String userId) async {
       final authService = AuthService();
@@ -520,10 +525,10 @@ static Future<Map<String, dynamic>> createAddress({
     
     // Match the exact field names that Laravel's CreateAddressRequest expects
     final Map<String, dynamic> addressData = {
-      'address_line_1': address,           // Required field
-      'address_line_2': null,               // Optional field
-      'city': city,                         // Required field
-      'state_province_or_region': 'Punjab', // Required field - adjust as needed
+      'address_line_1': address,           
+      'address_line_2': null,               
+      'city': city,                         
+      'state_province_or_region': 'Punjab', 
       'address_type': 'shipping',               // Required field - must be 'shipping' for checkout
     };
     

@@ -438,72 +438,104 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> with SingleTi
       });
     }
   }
-
-  // ============ YOUR EXISTING _handleFollowToggle METHOD ============
-  Future<void> _handleFollowToggle() async {
+Future<void> _handleFollowToggle() async {
+  print('🔍 ========== START FOLLOW TOGGLE ==========');
+  print('🎯 Seller ID: ${widget.sellerId}');
+  
+  try {
+    // Check if token exists
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    print('🔑 Token exists: ${token != null}');
+    print('🔑 Token value: ${token != null ? token.substring(0, token.length > 20 ? 20 : token.length) : 'null'}...');
+    
+    if (token == null) {
+      print('❌ No token found - user not logged in');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please login to follow sellers'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
     // Try using provider first
-    try {
-      final followProvider = Provider.of<FollowProvider>(context, listen: false);
-      final isFollowing = followProvider.isFollowing(widget.sellerId);
+    final followProvider = Provider.of<FollowProvider>(context, listen: false);
+    final isFollowing = followProvider.isFollowing(widget.sellerId);
+    print('📊 Current follow status: ${isFollowing ? "FOLLOWING" : "NOT FOLLOWING"}');
+    
+    // Call API
+    print('📡 Calling API to ${isFollowing ? "UNFOLLOW" : "FOLLOW"} user...');
+    bool success;
+    if (isFollowing) {
+      print('📡 Calling unfollowUser API...');
+      success = await ApiService.unfollowUser(widget.sellerId);
+    } else {
+      print('📡 Calling followUser API...');
+      success = await ApiService.followUser(widget.sellerId);
+    }
+    
+    print('📡 API Response - Success: $success');
+    
+    if (success) {
+      print('✅ Follow status updated successfully');
+      followProvider.toggleFollow(widget.sellerId);
       
-      // Call API
-      bool success;
-      if (isFollowing) {
-        success = await ApiService.unfollowUser(widget.sellerId);
-      } else {
-        success = await ApiService.followUser(widget.sellerId);
-      }
-      
-      if (success) {
-        followProvider.toggleFollow(widget.sellerId);
-        
-        // Update local followers count
-        setState(() {
-          _localFollowersCount = isFollowing 
-              ? _localFollowersCount - 1 
-              : _localFollowersCount + 1;
-        });
-        
-        // Show feedback
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isFollowing 
-                  ? 'Unfollowed ${_seller?.name ?? 'seller'}'
-                  : 'Following ${_seller?.name ?? 'seller'}',
-            ),
-            duration: const Duration(seconds: 1),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to update follow status'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      // Fallback to local state if provider fails
+      // Update local followers count
       setState(() {
-        _localIsFollowing = !_localIsFollowing;
-        _localFollowersCount = _localIsFollowing 
-            ? _localFollowersCount + 1 
-            : _localFollowersCount - 1;
+        _localFollowersCount = isFollowing 
+            ? _localFollowersCount - 1 
+            : _localFollowersCount + 1;
+        print('📊 New local followers count: $_localFollowersCount');
       });
       
+      // Show feedback
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _localIsFollowing 
-                ? 'Following ${_seller?.name ?? 'seller'} (offline mode)'
-                : 'Unfollowed ${_seller?.name ?? 'seller'} (offline mode)',
+            isFollowing 
+                ? 'Unfollowed ${_seller?.name ?? 'seller'}'
+                : 'Following ${_seller?.name ?? 'seller'}',
           ),
           duration: const Duration(seconds: 1),
         ),
       );
+    } else {
+      print('❌ API returned false - follow/unfollow failed');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to update follow status'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
+  } catch (e, stacktrace) {
+    print('❌ EXCEPTION in follow toggle: $e');
+    print('📚 Stacktrace: $stacktrace');
+    
+    // Fallback to local state if provider fails
+    setState(() {
+      _localIsFollowing = !_localIsFollowing;
+      _localFollowersCount = _localIsFollowing 
+          ? _localFollowersCount + 1 
+          : _localFollowersCount - 1;
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _localIsFollowing 
+              ? 'Following ${_seller?.name ?? 'seller'} (offline mode)'
+              : 'Unfollowed ${_seller?.name ?? 'seller'} (offline mode)',
+        ),
+        duration: const Duration(seconds: 1),
+      ),
+    );
   }
+  
+  print('🔍 ========== END FOLLOW TOGGLE ==========');
+}
 
   // ============ REST OF YOUR METHODS (build, _buildStatColumn, etc.) ============
   @override

@@ -13,6 +13,9 @@ class ApiClient {
   
   // IMPORTANT: includeHost defaults to TRUE for emulator compatibility
   static Map<String, String> getHeaders({String? token, bool includeHost = true}) {
+     print('🔍 ApiClient.getHeaders called');
+  print('📡 baseUrl: $baseUrl');
+  print('📡 includeHost: $includeHost');
     final headers = Map<String, String>.from(_baseHeaders);
     
     if (token != null && token.isNotEmpty) {
@@ -22,8 +25,16 @@ class ApiClient {
     // CRITICAL: Add Host header for local development
     if (includeHost && baseUrl.contains('10.0.2.2')) {
       headers['Host'] = 'depop-backend.test';
+      
+    print('📝 Added Host header: depop-backend.test');
     }
+    else {
+    print('⚠️ Host header NOT added - condition not met');
+    print('   includeHost: $includeHost');
+    print('   baseUrl contains 10.0.2.2: ${baseUrl.contains('10.0.2.2')}');
+  }
     
+  print('📡 Final headers: $headers');
     return headers;
   }
   
