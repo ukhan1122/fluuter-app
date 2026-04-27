@@ -186,7 +186,6 @@
   Widget _buildOfferCard(Offer offer) {
     final currencyFormat = NumberFormat.currency(symbol: 'Rs. ', decimalDigits: 0);
     
-    // Check if this is YOUR product (you are the seller)
     final bool isMyProduct = _currentUserId == offer.sellerId;
 
     return Card(
@@ -490,10 +489,9 @@
 
   Future<void> _handleBuyNow(Offer offer) async {
     try {
-      // Get the CartProvider
+
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
       
-      // Create a CartItem from the accepted offer
       final cartItem = CartItem(
         productId: offer.productId,
         sellerId: offer.sellerId,
@@ -503,10 +501,8 @@
         quantity: 1,
       );
       
-      // Add to cart
       cartProvider.addToCart(cartItem);
       
-      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Added to cart!'),
@@ -557,7 +553,7 @@
 
 
     void _showCounterDialog(Offer offer) {
-      Navigator.pop(context); // Close action dialog
+      Navigator.pop(context); 
       
       final TextEditingController priceController = TextEditingController(text: offer.price.toString());
       final TextEditingController messageController = TextEditingController();
@@ -655,10 +651,8 @@
     final bool isSeller = widget.currentUserId == widget.offer.sellerId;
     final bool isBuyer = widget.currentUserId == widget.offer.buyerId;
     
-    // Only sellers can counter
     final bool canCounter = isSeller;
     
-    // Both buyers and sellers can accept/reject when it's their turn
     final bool canAcceptReject = 
         (isSeller && offer.actorId == widget.offer.buyerId) ||
         (isBuyer && offer.actorId == widget.offer.sellerId);
@@ -749,10 +743,8 @@
             ? const Center(child: CircularProgressIndicator())
             : Column(
                 children: [
-                  // Product Summary Card
                   _buildProductSummary(),
                   
-                  // Conversation Thread
                   Expanded(
                     child: _conversationOffers.isEmpty
                         ? _buildEmptyConversation()
@@ -794,9 +786,8 @@
             orElse: () => throw Exception('Product not found'),
           );
           
-          if (mounted) Navigator.pop(context); // Close loading dialog
+          if (mounted) Navigator.pop(context); 
           
-          // Navigate to product detail
           Navigator.push(
             context,
             MaterialPageRoute(

@@ -515,16 +515,19 @@ static Future<Map<String, dynamic>> createAddress({
   await authService.isLoggedIn();
   final token = authService.token;
   
-  // For guest users, create address without token
-  // The backend should handle guest addresses differently
   try {
-    final url = Uri.parse('$baseUrl/api/v1/addresses');
+    final url = Uri.parse('$baseUrl/api/v1/user/address');
     
+    // Match the exact field names that Laravel's CreateAddressRequest expects
     final Map<String, dynamic> addressData = {
-      'address': address,
-      'city': city,
-      'phone': phone,
+      'address_line_1': address,           // Required field
+      'address_line_2': null,               // Optional field
+      'city': city,                         // Required field
+      'state_province_or_region': 'Punjab', // Required field - adjust as needed
+      'address_type': 'shipping',               // Required field - must be 'shipping' for checkout
     };
+    
+    print('📦 Sending address data: $addressData');
     
     final response = await http.post(
       url,
@@ -534,21 +537,41 @@ static Future<Map<String, dynamic>> createAddress({
       body: jsonEncode(addressData),
     ).timeout(const Duration(seconds: 15));
     
-    print('📡 Address Response: ${response.statusCode}');
+    print('📡 Address Response Status: ${response.statusCode}');
+    print('📡 Address Response Body: ${response.body}');
     
     if (response.statusCode == 200 || response.statusCode == 201) {
       final responseData = json.decode(response.body);
+      print('✅ Address created successfully!');
       return {
         'success': true,
-        'data': responseData['data'] ?? {'id': responseData['id'] ?? responseData},
+        'data': responseData['data'] ?? responseData,
       };
+    } else if (response.statusCode == 422) {
+      // Parse and show validation errors
+      try {
+        final errorData = json.decode(response.body);
+        print('❌ Validation failed:');
+        if (errorData['errors'] != null) {
+          errorData['errors'].forEach((field, errors) {
+            print('   - $field: ${errors.join(', ')}');
+          });
+        }
+      } catch (e) {
+        print('❌ Error response: ${response.body}');
+      }
+      return {'success': false, 'error': 'Validation failed'};
+    } else {
+      print('❌ Unexpected response: ${response.statusCode}');
+      return {'success': false, 'error': 'Failed to create address'};
     }
-    return {'success': false, 'error': 'Failed to create address'};
   } catch (e) {
     print('❌ Error creating address: $e');
     return {'success': false, 'error': e.toString()};
   }
 }
+
+
 
   static Future<Map<String, dynamic>> createOrder({
     required Map<String, dynamic> orderData,
@@ -559,6 +582,9 @@ static Future<Map<String, dynamic>> createAddress({
     if (token == null) return {'success': false, 'error': 'Not authenticated'};
     return await OrderApi.createOrder(token: token, orderData: orderData);
   }
+
+
+
 
 
 

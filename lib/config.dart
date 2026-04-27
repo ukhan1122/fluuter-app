@@ -4,7 +4,7 @@ import 'dart:io' show Platform;
 
 class AppConfig {
   // FOR LOCAL DEVELOPMENT
-  static const bool forceLocal = false;
+  static const bool forceLocal = true;
   
   // Emulator URL
   static const String emulatorUrl = 'http://10.0.2.2';

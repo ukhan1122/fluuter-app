@@ -6,6 +6,9 @@ import '../../services/api_service.dart';
 import 'package:provider/provider.dart';
 import '../../utils/image_utils.dart';
 import 'package:uuid/uuid.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../../config.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final List<CartItem> cartItems;
@@ -25,6 +28,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   String _paymentMethod = 'Cash on Delivery';
   String _deliveryOption = 'Standard Delivery';
+  
+  // Address selection
+  List<Map<String, dynamic>> _savedAddresses = [];
+  int? _selectedAddressId;
+  bool _isLoadingAddresses = false;
+  bool _useNewAddress = false;
+  bool _addressesFetched = false; // Track if addresses have been fetched
 
   @override
   void dispose() {
@@ -36,10 +46,96 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     super.dispose();
   }
 
-    @override
+  @override
   void initState() {
     super.initState();
-    _clearInvalidGuestId();  // Clear old invalid guest ID on startup
+    _clearInvalidGuestId();
+    _loadUserProfile();
+    // Don't load addresses automatically - only when needed
+  }
+
+  Future<void> _loadUserProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    final isLoggedIn = token != null && token.isNotEmpty;
+    
+    if (isLoggedIn) {
+      try {
+        final userProfile = await ApiService.getUserProfile(token);
+        if (userProfile['success'] == true && mounted) {
+          final userData = userProfile['data'];
+          setState(() {
+            _nameController.text = '${userData['first_name'] ?? ''} ${userData['last_name'] ?? ''}'.trim();
+            _emailController.text = userData['email'] ?? '';
+            _phoneController.text = userData['phone'] ?? '';
+          });
+        }
+      } catch (e) {
+        print('Error loading user profile: $e');
+      }
+    }
+  }
+
+  Future<void> _fetchUserAddresses() async {
+    if (_addressesFetched) return;
+    
+    setState(() {
+      _isLoadingAddresses = true;
+    });
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+      
+      if (token == null) {
+        setState(() {
+          _isLoadingAddresses = false;
+        });
+        return;
+      }
+      
+      final url = Uri.parse('${ApiService.baseUrl}/api/v1/user/address');
+      final headers = AppConfig.getHeaders(token: token);
+      final response = await http.get(url, headers: headers);
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        List<Map<String, dynamic>> addresses = [];
+        
+        if (data['data'] != null) {
+          if (data['data'] is List) {
+            addresses = List<Map<String, dynamic>>.from(data['data']);
+          } else if (data['data'] is Map) {
+            addresses = [Map<String, dynamic>.from(data['data'])];
+          }
+        }
+        
+        // Filter only shipping addresses
+        addresses = addresses.where((addr) => 
+          addr['address_type'] == 'shipping' || addr['address_type'] == 'home'
+        ).toList();
+        
+        setState(() {
+          _savedAddresses = addresses;
+          if (addresses.isNotEmpty) {
+            _selectedAddressId = addresses.first['id'];
+          }
+          _isLoadingAddresses = false;
+          _addressesFetched = true;
+        });
+      } else {
+        setState(() {
+          _isLoadingAddresses = false;
+          _addressesFetched = true;
+        });
+      }
+    } catch (e) {
+      print('Error fetching addresses: $e');
+      setState(() {
+        _isLoadingAddresses = false;
+        _addressesFetched = true;
+      });
+    }
   }
 
   double get _subtotal => widget.cartItems.fold(0, (sum, item) => sum + item.totalPrice);
@@ -47,36 +143,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                _deliveryOption == 'Express Delivery' ? 500 : 800;
   double get _total => _subtotal + _deliveryCharge;
 
- 
-   Future<String> _getGuestId() async {
+  Future<String> _getGuestId() async {
     final prefs = await SharedPreferences.getInstance();
     String? guestId = prefs.getString('guest_id');
     
-    // Check if existing guest ID is a valid UUID
     final uuidRegex = RegExp(
       r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
       caseSensitive: false,
     );
     
     if (guestId != null && !uuidRegex.hasMatch(guestId)) {
-      print('⚠️ Invalid guest ID found: $guestId - generating new UUID');
       guestId = null;
       await prefs.remove('guest_id');
     }
     
     if (guestId == null) {
-      guestId = _generateUuid();
+      guestId = const Uuid().v4();
       await prefs.setString('guest_id', guestId);
-      print('✅ New guest ID generated: $guestId');
-    } else {
-      print('✅ Using existing guest ID: $guestId');
     }
     
     return guestId;
   }
-String _generateUuid() {
-  return const Uuid().v4();  // Generates proper UUID like "550e8400-e29b-41d4-a716-446655440000"
-}
 
   void _confirmOrder() {
     if (_formKey.currentState!.validate()) {
@@ -132,11 +219,9 @@ String _generateUuid() {
                 Navigator.pop(dialogContext);
                 if (!mounted) return;
                 
-                // Close keyboard first
                 FocusScope.of(context).unfocus();
                 await Future.delayed(const Duration(milliseconds: 200));
                 
-                // Show loading dialog
                 BuildContext? loadingDialogContext;
                 if (mounted) {
                   showDialog(
@@ -158,49 +243,46 @@ String _generateUuid() {
                   );
                 }
                 
-
-                             // Check if user is logged in FIRST
                 final prefs = await SharedPreferences.getInstance();
                 final token = prefs.getString('auth_token');
                 final isLoggedIn = token != null && token.isNotEmpty;
                 
-                print('🔐 Is user logged in: $isLoggedIn');
-                
-                int? addressId = null;  // Declare ONCE here
-                final sellerId = widget.cartItems.first.sellerId;  // Declare ONCE here
-                
-                if (isLoggedIn) {
-                  // ONLY logged-in users create address
-                  print('📝 Creating delivery address for logged-in user...');
-                  final addressResult = await ApiService.createAddress(
-                    address: _addressController.text.trim(),
-                    city: _cityController.text.trim(),
-                    phone: _phoneController.text.trim(),
-                  );
-                  
-                  if (!addressResult['success']) {
-                    if (mounted && loadingDialogContext != null) {
-                      Navigator.of(loadingDialogContext!).pop();
-                    }
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Failed to save address. Please try again.')),
-                    );
-                    return;
-                  }
-                  addressId = addressResult['data']['id'];
-                  print('✅ Address created with ID: $addressId');
-                } else {
-                  // Guest users - skip address creation
-                  print('👤 Guest user - skipping address creation (address will be sent in guest_info)');
-                }
-                
-                print('👤 Seller ID: $sellerId');
+                int? addressId = null;
+                final sellerId = widget.cartItems.first.sellerId;
                 
                 Map<String, dynamic> result;
                 
                 if (isLoggedIn) {
-                  // ===== AUTHENTICATED USER =====
-                  print('🔄 Using authenticated checkout...');
+                  if (_useNewAddress) {
+                    // Create new address
+                    final addressResult = await ApiService.createAddress(
+                      address: _addressController.text.trim(),
+                      city: _cityController.text.trim(),
+                      phone: _phoneController.text.trim(),
+                    );
+                    
+                    if (!addressResult['success']) {
+                      if (mounted && loadingDialogContext != null) {
+                        Navigator.of(loadingDialogContext!).pop();
+                      }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Failed to save address. Please try again.')),
+                      );
+                      return;
+                    }
+                    addressId = addressResult['data']['id'];
+                  } else {
+                    if (_selectedAddressId == null) {
+                      if (mounted && loadingDialogContext != null) {
+                        Navigator.of(loadingDialogContext!).pop();
+                      }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please select a delivery address')),
+                      );
+                      return;
+                    }
+                    addressId = _selectedAddressId;
+                  }
                   
                   // Sync cart items to backend
                   for (var item in widget.cartItems) {
@@ -210,8 +292,6 @@ String _generateUuid() {
                     );
                   }
                   
-                  await Future.delayed(const Duration(milliseconds: 500));
-                  
                   final cartItemsForBackend = widget.cartItems.map((item) {
                     return {
                       'product_id': item.productId,
@@ -219,7 +299,7 @@ String _generateUuid() {
                     };
                   }).toList();
                   
-                result = await ApiService.createOrder(
+                  result = await ApiService.createOrder(
                     orderData: {
                       'seller_id': sellerId,
                       'delivery_address_id': addressId,
@@ -227,96 +307,64 @@ String _generateUuid() {
                     },
                   );
                 } else {
-  print('🔄 Using guest checkout...');
-  
-  // Get or create guest ID
-  final guestId = await _getGuestId();
-  print('👤 Guest ID: $guestId');
-  
-  // Add products to guest cart
-  print('📦 Adding products to guest cart...');
-  for (var item in widget.cartItems) {
-    final added = await ApiService.addToGuestCart(
-      guestId: guestId,
-      productId: item.productId,
-      quantity: item.quantity,
-    );
-    print('Added product ${item.productId} (${item.title}) to guest cart: $added');
-  }
-  
-  await Future.delayed(const Duration(milliseconds: 500));
-  
-  // Split full name into first and last name
-  final nameParts = _nameController.text.trim().split(' ');
-  final firstName = nameParts.first;
-  final lastName = nameParts.length > 1 ? nameParts.skip(1).join(' ') : '';
-  
-  // Prepare guest checkout payload
-  final guestPayload = {
-    'guest_info': {
-      'guest_id': guestId,
-      'email': _emailController.text.trim(),
-      'first_name': firstName,
-      'last_name': lastName,
-      'city': _cityController.text.trim(),
-      'address': _addressController.text.trim(),
-      'phone': _phoneController.text.trim(),
-      'subscribe': false,
-      'save_info': false,
-      'text_offers': false,
-    },
-    'seller_id': sellerId,
-    'cart_items': widget.cartItems.map((item) {
-      return {
-        'product_id': item.productId,
-        'quantity': item.quantity,
-      };
-    }).toList(),
-  };
-  
-  print('📦 Guest payload: $guestPayload');
-  
-  // Call guest checkout endpoint
-  result = await ApiService.createGuestOrder(guestPayload);
-}
-                
-              
-                
-                print('📦 Order result: $result');
+                  // Guest checkout
+                  final guestId = await _getGuestId();
+                  
+                  for (var item in widget.cartItems) {
+                    await ApiService.addToGuestCart(
+                      guestId: guestId,
+                      productId: item.productId,
+                      quantity: item.quantity,
+                    );
+                  }
+                  
+                  final nameParts = _nameController.text.trim().split(' ');
+                  final firstName = nameParts.first;
+                  final lastName = nameParts.length > 1 ? nameParts.skip(1).join(' ') : '';
+                  
+                  final guestPayload = {
+                    'guest_info': {
+                      'guest_id': guestId,
+                      'email': _emailController.text.trim(),
+                      'first_name': firstName,
+                      'last_name': lastName,
+                      'city': _cityController.text.trim(),
+                      'address': _addressController.text.trim(),
+                      'phone': _phoneController.text.trim(),
+                      'subscribe': false,
+                      'save_info': false,
+                      'text_offers': false,
+                    },
+                    'seller_id': sellerId,
+                    'cart_items': widget.cartItems.map((item) {
+                      return {
+                        'product_id': item.productId,
+                        'quantity': item.quantity,
+                      };
+                    }).toList(),
+                  };
+                  
+                  result = await ApiService.createGuestOrder(guestPayload);
+                }
                 
                 if (mounted && loadingDialogContext != null) {
                   Navigator.of(loadingDialogContext!).pop();
                 }
                 
-                await Future.delayed(const Duration(milliseconds: 100));
-                
                 if (mounted) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (!mounted) return;
-                    
-                    if (result['success'] == true) {
-                      final cartProvider = Provider.of<CartProvider>(context, listen: false);
-                      cartProvider.clearCart();
-                      print('🎉 Order successful! ID: ${result['data']['id']}');
-                      _showOrderSuccessDialog(result['data']);
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Row(
-                            children: [
-                              const Icon(Icons.error, color: Colors.white),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text('Order failed: ${result['message'] ?? 'Please try again'}'),
-                              ),
-                            ],
-                          ),
-                          backgroundColor: Colors.red,
-                          duration: const Duration(seconds: 5),
-                        ),
-                      );
-                    }
-                  });
+                  if (result['success'] == true) {
+                    final cartProvider = Provider.of<CartProvider>(context, listen: false);
+                    cartProvider.clearCart();
+                    _showOrderSuccessDialog(result['data']);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Order failed: ${result['message'] ?? 'Please try again'}'),
+                        backgroundColor: Colors.red,
+                        duration: const Duration(seconds: 5),
+                      ),
+                    );
+                  }
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -331,26 +379,23 @@ String _generateUuid() {
     }
   }
 
-Future<void> _clearInvalidGuestId() async {
-  final prefs = await SharedPreferences.getInstance();
-  String? guestId = prefs.getString('guest_id');
-  
-  // Check if it's a valid UUID
-  final uuidRegex = RegExp(
-    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
-    caseSensitive: false,
-  );
-  
-  if (guestId != null && !uuidRegex.hasMatch(guestId)) {
-    print('⚠️ Clearing invalid guest ID: $guestId');
-    await prefs.remove('guest_id');
+  Future<void> _clearInvalidGuestId() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? guestId = prefs.getString('guest_id');
+    
+    final uuidRegex = RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+      caseSensitive: false,
+    );
+    
+    if (guestId != null && !uuidRegex.hasMatch(guestId)) {
+      await prefs.remove('guest_id');
+    }
   }
-}
 
   void _showOrderSuccessDialog(Map<String, dynamic> orderData) {
     if (!mounted) return;
     
-    // Helper function to convert to double safely
     double toDouble(dynamic value) {
       if (value == null) return 0.0;
       if (value is double) return value;
@@ -372,8 +417,6 @@ Future<void> _clearInvalidGuestId() async {
         : _total;
         
     final trackingNo = orderData['tracking_no']?.toString() ?? '';
-    
-    print('🎉 Showing success dialog for order: $trackingNo');
     
     showDialog(
       context: context,
@@ -455,30 +498,30 @@ Future<void> _clearInvalidGuestId() async {
     );
   }
 
-Widget _buildTextField(TextEditingController controller, String label, IconData icon, {TextInputType? keyboardType, String? Function(String?)? customValidator}) {
-  return TextFormField(
-    controller: controller,
-    keyboardType: keyboardType,
-    decoration: InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, color: Colors.grey.shade600),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: Colors.grey.shade300),
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {TextInputType? keyboardType, String? Function(String?)? customValidator}) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: Colors.grey.shade600),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Colors.redAccent, width: 2),
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    ),
-    validator: customValidator ?? (v) => v == null || v.isEmpty ? 'Required' : null,
-  );
-}
+      validator: customValidator ?? (v) => v == null || v.isEmpty ? 'Required' : null,
+    );
+  }
 
   Widget _buildSection(String title, Widget child) {
     return Column(
@@ -642,6 +685,247 @@ Widget _buildTextField(TextEditingController controller, String label, IconData 
     );
   }
 
+  // Improved address selection UI
+  Widget _buildAddressSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Toggle between saved and new address
+        Row(
+          children: [
+            Expanded(
+              child: _buildToggleButton(
+                title: 'Saved Address',
+                icon: Icons.bookmark_border,
+                isSelected: !_useNewAddress,
+                onTap: () {
+                  setState(() {
+                    _useNewAddress = false;
+                    if (!_addressesFetched) {
+                      _fetchUserAddresses();
+                    }
+                  });
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildToggleButton(
+                title: 'New Address',
+                icon: Icons.add_location_alt,
+                isSelected: _useNewAddress,
+                onTap: () => setState(() => _useNewAddress = true),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        
+        if (!_useNewAddress)
+          _buildSavedAddressesUI()
+        else
+          _buildNewAddressForm(),
+      ],
+    );
+  }
+  
+
+
+Widget _buildSavedAddressesUI() {
+  if (_isLoadingAddresses) {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(32.0),
+        child: Column(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading your addresses...'),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  if (_savedAddresses.isEmpty && _addressesFetched) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.location_off, size: 48, color: Colors.orange.shade400),
+          const SizedBox(height: 12),
+          Text(
+            'No saved addresses found',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade700),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Tap "New Address" to add one',
+            style: TextStyle(color: Colors.orange.shade600),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  if (_savedAddresses.isEmpty) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          const CircularProgressIndicator(),
+          const SizedBox(height: 12),
+          Text('Loading addresses...', style: TextStyle(color: Colors.grey.shade600)),
+        ],
+      ),
+    );
+  }
+  
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      DropdownButtonFormField<int>(
+        value: _selectedAddressId,
+        isExpanded: true,
+        isDense: true,
+        decoration: InputDecoration(
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          prefixIcon: Icon(Icons.location_on, color: Colors.redAccent, size: 20),
+        ),
+        items: _savedAddresses.map((address) {
+          String fullAddress = address['address_line_1'] ?? '';
+          String city = address['city'] ?? '';
+          String region = address['state_province_or_region'] ?? '';
+          
+          // Create a single line address
+          String displayAddress = fullAddress;
+          if (city.isNotEmpty) {
+            displayAddress = '$fullAddress, $city';
+          }
+          if (region.isNotEmpty && city.isEmpty) {
+            displayAddress = '$fullAddress, $region';
+          }
+          
+          // Truncate if too long
+          if (displayAddress.length > 45) {
+            displayAddress = displayAddress.substring(0, 42) + '...';
+          }
+          
+          return DropdownMenuItem<int>(
+            value: address['id'],
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    displayAddress,
+                    style: const TextStyle(fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+        onChanged: (value) {
+          setState(() {
+            _selectedAddressId = value;
+          });
+        },
+        hint: const Text('Select delivery address'),
+      ),
+      const SizedBox(height: 12),
+      if (_selectedAddressId != null)
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.green.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.green.shade200),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Address selected for delivery',
+                  style: TextStyle(color: Colors.green.shade700, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+    ],
+  );
+}
+
+
+
+
+
+
+
+  
+  Widget _buildToggleButton({
+    required String title,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.redAccent : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? Colors.redAccent : Colors.grey.shade300,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: isSelected ? Colors.white : Colors.grey.shade600, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              title,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.grey.shade700,
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildNewAddressForm() {
+    return Column(
+      children: [
+        _buildTextField(_addressController, 'Complete Address', Icons.home_outlined),
+        const SizedBox(height: 12),
+        _buildTextField(_cityController, 'City', Icons.location_city_outlined),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -662,51 +946,45 @@ Widget _buildTextField(TextEditingController controller, String label, IconData 
               _buildSection('Contact Information', Column(
                 children: [
                   _buildTextField(
-  _nameController, 
-  'Full Name', 
-  Icons.person_outline,
-  customValidator: (v) {
-    if (v == null || v.isEmpty) return 'Full name is required';
-    if (v.trim().split(' ').length < 2) return 'Please enter both first and last name';
-    return null;
-  },
-),
-const SizedBox(height: 12),
-_buildTextField(
-  _phoneController, 
-  'Phone Number', 
-  Icons.phone_outlined,
-  keyboardType: TextInputType.phone,
-  customValidator: (v) {
-    if (v == null || v.isEmpty) return 'Phone number is required';
-    if (v.length < 10) return 'Enter a valid phone number';
-    return null;
-  },
-),
-const SizedBox(height: 12),
-_buildTextField(
-  _emailController, 
-  'Email Address', 
-  Icons.email_outlined,
-  keyboardType: TextInputType.emailAddress,
-  customValidator: (v) {
-    if (v == null || v.isEmpty) return 'Email is required';
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-    if (!emailRegex.hasMatch(v)) return 'Enter a valid email address';
-    return null;
-  },
-),
+                    _nameController, 
+                    'Full Name', 
+                    Icons.person_outline,
+                    customValidator: (v) {
+                      if (v == null || v.isEmpty) return 'Full name is required';
+                      if (v.trim().split(' ').length < 2) return 'Please enter both first and last name';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _buildTextField(
+                    _phoneController, 
+                    'Phone Number', 
+                    Icons.phone_outlined,
+                    keyboardType: TextInputType.phone,
+                    customValidator: (v) {
+                      if (v == null || v.isEmpty) return 'Phone number is required';
+                      if (v.length < 10) return 'Enter a valid phone number';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _buildTextField(
+                    _emailController, 
+                    'Email Address', 
+                    Icons.email_outlined,
+                    keyboardType: TextInputType.emailAddress,
+                    customValidator: (v) {
+                      if (v == null || v.isEmpty) return 'Email is required';
+                      final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                      if (!emailRegex.hasMatch(v)) return 'Enter a valid email address';
+                      return null;
+                    },
+                  ),
                 ],
               )),
 
-              // Delivery Address
-              _buildSection('Delivery Address', Column(
-                children: [
-                  _buildTextField(_addressController, 'Complete Address', Icons.home_outlined),
-                  const SizedBox(height: 12),
-                  _buildTextField(_cityController, 'City', Icons.location_city_outlined),
-                ],
-              )),
+              // Delivery Address Section - Improved
+              _buildSection('Delivery Address', _buildAddressSection()),
 
               // Delivery Options
               _buildSection('Delivery Options', Column(
