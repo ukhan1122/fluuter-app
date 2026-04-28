@@ -13,6 +13,8 @@
   import '../../providers/cart_provider.dart';
   import 'dart:convert';
   import '../../utils/image_utils.dart';
+  import 'package:http/http.dart' as http;
+import '../../services/api/api_client.dart';
 
   class ReceivedOffersScreen extends StatefulWidget {
     const ReceivedOffersScreen({super.key});
@@ -39,35 +41,73 @@
       _fetchOffers();
     }
 
-  Future<void> _loadCurrentUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userDataJson = prefs.getString('user_data');
-    if (userDataJson != null) {
-      final Map<String, dynamic> userData = json.decode(userDataJson);
+
+Future<void> _loadCurrentUser() async {
+  final prefs = await SharedPreferences.getInstance();
+  final userDataJson = prefs.getString('user_data');
+  
+  if (userDataJson != null) {
+    final Map<String, dynamic> userData = json.decode(userDataJson);
+    
+    print('📦 Full user_data structure: $userData');
+    print('🔑 Available keys: ${userData.keys}');
+    
+    int? userId = userData['id'] ?? userData['user_id'];
+    
+    if (userId != null) {
+      print('✅ Found user ID in stored data: $userId');
+    } else {
+      print('⚠️ No user ID found in stored data, fetching from API...');
       
-      // Try to get ID from various possible locations
-      int? userId;
-      
-      if (userData.containsKey('id')) {
-        userId = userData['id'];
-      } else if (userData.containsKey('user') && userData['user'] is Map) {
-        userId = userData['user']['id'];
-      } else if (userData.containsKey('data') && userData['data'] is Map) {
-        userId = userData['data']['id'];
+      final token = prefs.getString('auth_token');
+      if (token != null && token.isNotEmpty) {
+        try {
+          // ✅ USE APICLIENT.GET WITH /api/user ENDPOINT
+          final response = await ApiClient.get(
+            '/api/user',
+            token: token,
+          );
+          
+          print('📡 Response status: ${response.statusCode}');
+          
+          if (response.statusCode == 200) {
+            final userApiData = json.decode(response.body);
+            print('📦 User API response contains id: ${userApiData.containsKey('id')}');
+            
+            userId = userApiData['id'];
+            if (userId != null) {
+              // Save the complete user data with ID
+              final updatedUserData = {
+                ...userData,
+                'id': userId,
+                'user_id': userId,
+              };
+              await prefs.setString('user_data', json.encode(updatedUserData));
+              print('✅ Retrieved and saved user ID from API: $userId');
+            } else {
+              print('⚠️ API response does not contain id field');
+              print('📦 Response keys: ${userApiData.keys}');
+            }
+          } else {
+            print('⚠️ Failed to fetch user data: ${response.statusCode}');
+            print('📡 Response body: ${response.body}');
+          }
+        } catch (e) {
+          print('❌ Error fetching user data: $e');
+        }
+      } else {
+        print('❌ No auth token found');
       }
-      
-      // For Openentuser (buyer), we know their ID is 165 from your logs
-      // This is a temporary hardcoded fix
-      if (userData['username'] == 'Openentuser' && userId == null) {
-        userId = 165;
-      }
-      
-      setState(() {
-        _currentUserId = userId;
-      });
-      print('✅ Loaded current user ID: $_currentUserId');
     }
+    
+    setState(() {
+      _currentUserId = userId;
+    });
+    print('✅ Final loaded current user ID: $_currentUserId');
+  } else {
+    print('❌ No user_data found in SharedPreferences');
   }
+}
 
     void _handleTabChange() {
       if (!_tabController.indexIsChanging) {

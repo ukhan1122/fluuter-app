@@ -16,6 +16,7 @@ import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
 import '../config.dart';  // Add this import
 import '../utils/image_utils.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final String title, brand, price, category;
@@ -1301,12 +1302,13 @@ void _showNoContactInfo(String contactType) {
   );
 }
 
-  Future<void> _checkAuthAndMakeOffer() async {
+
+ 
+ Future<void> _checkAuthAndMakeOffer() async {
   final authService = AuthService();
   final isLoggedIn = await authService.isLoggedIn();
   
   if (!isLoggedIn) {
-    // Show login required dialog
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1320,8 +1322,6 @@ void _showNoContactInfo(String contactType) {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              // Navigate to login screen - adjust this based on your app
-              // Navigator.push(context, MaterialPageRoute(builder: (context) => LoginScreen()));
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
@@ -1334,7 +1334,28 @@ void _showNoContactInfo(String contactType) {
     return;
   }
   
-  // User is logged in, show offer dialog
+  // ✅ ADD THIS ONE CHECK
+  final prefs = await SharedPreferences.getInstance();
+  final userDataJson = prefs.getString('user_data');
+  int? currentUserId;
+  if (userDataJson != null) {
+    final userData = json.decode(userDataJson);
+    currentUserId = userData['id'] ?? userData['user_id'];
+  }
+  
+  final productSellerId = widget.product.user['id'] ?? widget.product.userId;
+  
+  if (currentUserId != null && productSellerId != null && currentUserId.toString() == productSellerId.toString()) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('You cannot make an offer on your own product'),
+        backgroundColor: Colors.orange,
+        duration: Duration(seconds: 2),
+      ),
+    );
+    return;
+  }
+  
   _showMakeOfferDialog();
 }
 

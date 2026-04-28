@@ -55,46 +55,73 @@ class OfferApi {
     }
   }
   
-  // Get conversation for a specific product
-  static Future<List<Offer>> getConversation({
-    required String token,
-    required int productId,
-    required int buyerId,
-    required int sellerId,
-  }) async {
-    try {
-      final response = await ApiClient.get(
-        '/api/v1/listing/products/offers/conversations?product_id=$productId&buyer_id=$buyerId&seller_id=$sellerId',
-        token: token,
-        timeout: const Duration(seconds: 15),
-      );
+ // Get conversation for a specific product
+static Future<List<Offer>> getConversation({
+  required String token,
+  required int productId,
+  required int buyerId,
+  required int sellerId,
+}) async {
+  try {
+    final response = await ApiClient.get(
+      '/api/v1/listing/products/offers/conversations?product_id=$productId&buyer_id=$buyerId&seller_id=$sellerId',
+      token: token,
+      timeout: const Duration(seconds: 15),
+    );
+    
+    if (response.statusCode == 200) {
+      final data = ApiClient.parseResponse(response);
+      List<dynamic> offersJson = [];
       
-      if (response.statusCode == 200) {
-        final data = ApiClient.parseResponse(response);
-        List<dynamic> offersJson = [];
+      print('📦 Conversation API response status: ${response.statusCode}');
+      
+      if (data.containsKey('data')) {
+        final dataValue = data['data'];
         
-        if (data.containsKey('data')) {
-          if (data['data'] is List) {
-            offersJson = data['data'] as List;
-          } else if (data['data'] is Map) {
-            final dataMap = data['data'] as Map;
-            if (dataMap.containsKey('offers') && dataMap['offers'] is List) {
-              offersJson = dataMap['offers'] as List;
-            } else if (dataMap.containsKey('conversation') && dataMap['conversation'] is List) {
-              offersJson = dataMap['conversation'] as List;
+        if (dataValue is List) {
+          offersJson = dataValue;
+          print('✅ Found ${offersJson.length} offers (data is List)');
+        } else if (dataValue is Map) {
+          // ✅ CRITICAL FIX: Look for "original" key
+          if (dataValue.containsKey('original') && dataValue['original'] is List) {
+            offersJson = dataValue['original'];
+            print('✅ Found ${offersJson.length} offers in "original"');
+          } 
+          // Fallback to other possible keys
+          else if (dataValue.containsKey('offers') && dataValue['offers'] is List) {
+            offersJson = dataValue['offers'];
+            print('✅ Found ${offersJson.length} offers in "offers"');
+          } 
+          else if (dataValue.containsKey('conversation') && dataValue['conversation'] is List) {
+            offersJson = dataValue['conversation'];
+            print('✅ Found ${offersJson.length} offers in "conversation"');
+          }
+          else {
+            // Try to find any list in the map
+            for (var value in dataValue.values) {
+              if (value is List && value.isNotEmpty) {
+                offersJson = value;
+                print('✅ Found ${offersJson.length} offers in other key');
+                break;
+              }
             }
           }
         }
-        
-        return offersJson.map((json) => Offer.fromJson(json)).toList();
       }
-      return [];
-    } catch (e) {
-      print('❌ Error fetching conversation: $e');
-      return [];
+      
+      print('📦 Total offers parsed: ${offersJson.length}');
+      return offersJson.map((json) => Offer.fromJson(json)).toList();
     }
+    return [];
+  } catch (e) {
+    print('❌ Error fetching conversation: $e');
+    return [];
   }
+}
   
+
+
+
   // Create a new offer
   static Future<Map<String, dynamic>> createOffer({
     required String token,
