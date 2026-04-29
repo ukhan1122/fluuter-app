@@ -51,6 +51,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     super.initState();
     _clearInvalidGuestId();
     _loadUserProfile();
+    
     // Don't load addresses automatically - only when needed
   }
 
@@ -77,66 +78,77 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _fetchUserAddresses() async {
-    if (_addressesFetched) return;
+  if (_addressesFetched) return;
+  
+  print('🕐 START fetching addresses at: ${DateTime.now()}');
+  final stopwatch = Stopwatch()..start();
+  
+  setState(() {
+    _isLoadingAddresses = true;
+  });
+  
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
     
-    setState(() {
-      _isLoadingAddresses = true;
-    });
+    if (token == null) {
+      setState(() {
+        _isLoadingAddresses = false;
+      });
+      return;
+    }
     
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token');
+    final url = Uri.parse('${ApiService.baseUrl}/api/v1/user/address');
+    print('🕐 URL: $url');
+    
+    final headers = AppConfig.getHeaders(token: token);
+    
+    print('🕐 Sending request...');
+    final response = await http.get(url, headers: headers);
+    print('🕐 Response received in: ${stopwatch.elapsedMilliseconds}ms');
+    
+    if (response.statusCode == 200) {
+      print('🕐 Parsing response...');
+      final data = json.decode(response.body);
+      List<Map<String, dynamic>> addresses = [];
       
-      if (token == null) {
-        setState(() {
-          _isLoadingAddresses = false;
-        });
-        return;
-      }
-      
-      final url = Uri.parse('${ApiService.baseUrl}/api/v1/user/address');
-      final headers = AppConfig.getHeaders(token: token);
-      final response = await http.get(url, headers: headers);
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        List<Map<String, dynamic>> addresses = [];
-        
-        if (data['data'] != null) {
-          if (data['data'] is List) {
-            addresses = List<Map<String, dynamic>>.from(data['data']);
-          } else if (data['data'] is Map) {
-            addresses = [Map<String, dynamic>.from(data['data'])];
-          }
+      if (data['data'] != null) {
+        if (data['data'] is List) {
+          addresses = List<Map<String, dynamic>>.from(data['data']);
+        } else if (data['data'] is Map) {
+          addresses = [Map<String, dynamic>.from(data['data'])];
         }
-        
-        // Filter only shipping addresses
-        addresses = addresses.where((addr) => 
-          addr['address_type'] == 'shipping' || addr['address_type'] == 'home'
-        ).toList();
-        
-        setState(() {
-          _savedAddresses = addresses;
-          if (addresses.isNotEmpty) {
-            _selectedAddressId = addresses.first['id'];
-          }
-          _isLoadingAddresses = false;
-          _addressesFetched = true;
-        });
-      } else {
-        setState(() {
-          _isLoadingAddresses = false;
-          _addressesFetched = true;
-        });
       }
-    } catch (e) {
-      print('Error fetching addresses: $e');
+      
+      print('🕐 Filtering addresses...');
+      addresses = addresses.where((addr) => 
+        addr['address_type'] == 'shipping' || addr['address_type'] == 'home'
+      ).toList();
+      
+      setState(() {
+        _savedAddresses = addresses;
+        if (addresses.isNotEmpty) {
+          _selectedAddressId = addresses.first['id'];
+        }
+        _isLoadingAddresses = false;
+        _addressesFetched = true;
+      });
+      print('🕐 Done! Total time: ${stopwatch.elapsedMilliseconds}ms');
+    } else {
+      print('🕐 Failed with status: ${response.statusCode}');
       setState(() {
         _isLoadingAddresses = false;
         _addressesFetched = true;
       });
     }
+  } catch (e) {
+    print('🕐 Error: $e');
+    setState(() {
+      _isLoadingAddresses = false;
+      _addressesFetched = true;
+    });
   }
+}
 
   double get _subtotal => widget.cartItems.fold(0, (sum, item) => sum + item.totalPrice);
   double get _deliveryCharge => _deliveryOption == 'Standard Delivery' ? 200 : 
@@ -685,51 +697,67 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  // Improved address selection UI
-  Widget _buildAddressSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Toggle between saved and new address
-        Row(
-          children: [
-            Expanded(
-              child: _buildToggleButton(
-                title: 'Saved Address',
-                icon: Icons.bookmark_border,
-                isSelected: !_useNewAddress,
-                onTap: () {
-                  setState(() {
-                    _useNewAddress = false;
-                    if (!_addressesFetched) {
-                      _fetchUserAddresses();
-                    }
-                  });
-                },
-              ),
+Widget _buildAddressSection() {
+  // Check if user is logged in
+  return FutureBuilder(
+    future: SharedPreferences.getInstance(),
+    builder: (context, snapshot) {
+      final prefs = snapshot.data;
+      final token = prefs?.getString('auth_token');
+      final isLoggedIn = token != null && token.isNotEmpty;
+      
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // For guest users, only show New Address option
+          if (!isLoggedIn)
+            _buildNewAddressForm()
+          else
+            Column(
+              children: [
+                // Toggle between saved and new address (only for logged-in users)
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildToggleButton(
+                        title: 'Saved Address',
+                        icon: Icons.bookmark_border,
+                        isSelected: !_useNewAddress,
+                        onTap: () {
+                          setState(() {
+                            _useNewAddress = false;
+                            if (!_addressesFetched) {
+                              _fetchUserAddresses();
+                            }
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildToggleButton(
+                        title: 'New Address',
+                        icon: Icons.add_location_alt,
+                        isSelected: _useNewAddress,
+                        onTap: () => setState(() => _useNewAddress = true),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                
+                if (!_useNewAddress)
+                  _buildSavedAddressesUI()
+                else
+                  _buildNewAddressForm(),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildToggleButton(
-                title: 'New Address',
-                icon: Icons.add_location_alt,
-                isSelected: _useNewAddress,
-                onTap: () => setState(() => _useNewAddress = true),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        
-        if (!_useNewAddress)
-          _buildSavedAddressesUI()
-        else
-          _buildNewAddressForm(),
-      ],
-    );
-  }
+        ],
+      );
+    },
+  );
+}
   
-
 
 Widget _buildSavedAddressesUI() {
   if (_isLoadingAddresses) {
@@ -741,6 +769,26 @@ Widget _buildSavedAddressesUI() {
             CircularProgressIndicator(),
             SizedBox(height: 16),
             Text('Loading your addresses...'),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  // Always fetch if addresses are empty and not fetched yet
+  if (_savedAddresses.isEmpty && !_addressesFetched && !_isLoadingAddresses) {
+    // Trigger fetch immediately
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchUserAddresses();
+    });
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(32.0),
+        child: Column(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Fetching your addresses...'),
           ],
         ),
       ),
@@ -773,23 +821,7 @@ Widget _buildSavedAddressesUI() {
     );
   }
   
-  if (_savedAddresses.isEmpty) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 12),
-          Text('Loading addresses...', style: TextStyle(color: Colors.grey.shade600)),
-        ],
-      ),
-    );
-  }
-  
+  // Rest of your existing code for dropdown...
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -809,7 +841,6 @@ Widget _buildSavedAddressesUI() {
           String city = address['city'] ?? '';
           String region = address['state_province_or_region'] ?? '';
           
-          // Create a single line address
           String displayAddress = fullAddress;
           if (city.isNotEmpty) {
             displayAddress = '$fullAddress, $city';
@@ -818,7 +849,6 @@ Widget _buildSavedAddressesUI() {
             displayAddress = '$fullAddress, $region';
           }
           
-          // Truncate if too long
           if (displayAddress.length > 45) {
             displayAddress = displayAddress.substring(0, 42) + '...';
           }

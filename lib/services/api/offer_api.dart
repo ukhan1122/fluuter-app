@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'api_client.dart';
 import '../../models/offer.dart';
 
@@ -55,6 +56,8 @@ class OfferApi {
     }
   }
   
+ 
+
  // Get conversation for a specific product
 static Future<List<Offer>> getConversation({
   required String token,
@@ -82,22 +85,16 @@ static Future<List<Offer>> getConversation({
           offersJson = dataValue;
           print('✅ Found ${offersJson.length} offers (data is List)');
         } else if (dataValue is Map) {
-          // ✅ CRITICAL FIX: Look for "original" key
           if (dataValue.containsKey('original') && dataValue['original'] is List) {
             offersJson = dataValue['original'];
             print('✅ Found ${offersJson.length} offers in "original"');
-          } 
-          // Fallback to other possible keys
-          else if (dataValue.containsKey('offers') && dataValue['offers'] is List) {
+          } else if (dataValue.containsKey('offers') && dataValue['offers'] is List) {
             offersJson = dataValue['offers'];
             print('✅ Found ${offersJson.length} offers in "offers"');
-          } 
-          else if (dataValue.containsKey('conversation') && dataValue['conversation'] is List) {
+          } else if (dataValue.containsKey('conversation') && dataValue['conversation'] is List) {
             offersJson = dataValue['conversation'];
             print('✅ Found ${offersJson.length} offers in "conversation"');
-          }
-          else {
-            // Try to find any list in the map
+          } else {
             for (var value in dataValue.values) {
               if (value is List && value.isNotEmpty) {
                 offersJson = value;
@@ -239,35 +236,64 @@ static Future<List<Offer>> getConversation({
     }
   }
   
-  // Send a counter offer
-  static Future<Map<String, dynamic>> counterOffer({
-    required String token,
-    required int offerId,
-    required double price,
-    String? message,
-  }) async {
-    try {
-      final response = await ApiClient.post(
-        '/api/v1/listing/products/offers/$offerId/counter-offer',
-        token: token,
-        body: {
-          'price': price,
-          if (message != null) 'message': message,
-        },
-        timeout: const Duration(seconds: 15),
-      );
-      
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = ApiClient.parseResponse(response);
-        return {
-          'success': true,
-          'data': data['data'] ?? data,
-          'message': 'Counter offer sent successfully',
-        };
-      }
-      return {'success': false, 'error': 'Failed to send counter offer'};
-    } catch (e) {
-      return {'success': false, 'error': e.toString()};
+ 
+
+ // Send a counter offer
+static Future<Map<String, dynamic>> counterOffer({
+  required String token,
+  required int offerId,
+  required double price,
+  String? message,
+}) async {
+  try {
+    print('📡 ========== COUNTER OFFER API CALL ==========');
+    print('📡 URL: /api/v1/listing/products/offers/$offerId/counter-offer');
+    print('📡 Request body: {"price": $price, "message": ${message ?? 'null'}}');
+    print('🔑 Token exists: ${token != null}');
+    
+    final response = await ApiClient.post(
+      '/api/v1/listing/products/offers/$offerId/counter-offer',
+      token: token,
+      body: {
+        'price': price,
+        if (message != null) 'message': message,
+      },
+      timeout: const Duration(seconds: 15),
+    );
+    
+    print('📡 Response status: ${response.statusCode}');
+    print('📡 Response body: ${response.body}');
+    
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final data = ApiClient.parseResponse(response);
+      print('✅ Counter offer successful!');
+      return {
+        'success': true,
+        'data': data['data'] ?? data,
+        'message': 'Counter offer sent successfully',
+      };
     }
+    
+    // Try to parse error message
+    String errorMessage = 'Failed to send counter offer';
+    try {
+      final errorData = json.decode(response.body);
+      errorMessage = errorData['message'] ?? errorData['error'] ?? 'Failed to send counter offer';
+      if (errorData['errors'] != null) {
+        errorMessage = errorData['errors'].toString();
+      }
+    } catch (e) {
+      // Ignore parse error
+    }
+    
+    print('❌ Counter offer failed: $errorMessage');
+    return {
+      'success': false,
+      'error': errorMessage,
+    };
+  } catch (e) {
+    print('❌ Exception in counterOffer: $e');
+    return {'success': false, 'error': e.toString()};
   }
+}
 }

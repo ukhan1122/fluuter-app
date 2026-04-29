@@ -314,7 +314,7 @@ class _CustomDrawerState extends State<CustomDrawer> with WidgetsBindingObserver
     WidgetsBinding.instance.addObserver(this);
     _loadUserData();
     
-    _timer = Timer.periodic(const Duration(seconds: 10), (timer) {
+    _timer = Timer.periodic(const Duration(seconds: 2), (timer) {
       if (mounted && _isLoggedIn) {
         _loadUnreadOfferCount();
       }

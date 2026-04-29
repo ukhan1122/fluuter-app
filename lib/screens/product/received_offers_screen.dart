@@ -592,92 +592,112 @@ Future<void> _loadCurrentUser() async {
   }
 
 
-    void _showCounterDialog(Offer offer) {
-      Navigator.pop(context); 
-      
-      final TextEditingController priceController = TextEditingController(text: offer.price.toString());
-      final TextEditingController messageController = TextEditingController();
-      bool isSending = false;
+   void _showCounterDialog(Offer offer) {
+  final TextEditingController priceController = TextEditingController(text: offer.price.toString());
+  final TextEditingController messageController = TextEditingController();
+  bool isSending = false;
 
-      showDialog(
-        context: context,
-        builder: (dialogContext) => StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Counter Offer'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: priceController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Your counter price',
-                      prefixText: 'Rs. ',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: messageController,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      labelText: 'Message (optional)',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('CANCEL')),
-                ElevatedButton(
-                  onPressed: isSending ? null : () async {
-                    final price = double.tryParse(priceController.text);
-                    if (price == null || price <= 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please enter a valid price'), backgroundColor: Colors.red),
-                      );
-                      return;
-                    }
-
-                    setState(() => isSending = true);
-
-                    try {
-                      final result = await ApiService.counterOffer(
-                        offerId: offer.id,
-                        price: price,
-                        message: messageController.text.isNotEmpty ? messageController.text : null,
-                      );
-
-                      if (result['success'] == true) {
-                        widget.onOfferUpdated();
-                        if (mounted) {
-                          Navigator.pop(dialogContext);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Counter offer sent'), backgroundColor: Colors.green),
-                          );
-                          Navigator.pop(context);
-                        }
-                      }
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-                      );
-                    } finally {
-                      if (mounted) setState(() => isSending = false);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                  child: isSending
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('SEND COUNTER'),
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) {
+        return AlertDialog(
+          title: const Text('Counter Offer'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: priceController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Your counter price',
+                  prefixText: 'Rs. ',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-              ],
-            );
-          },
-        ),
-      );
-    }
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: messageController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: 'Message (optional)',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('CANCEL'),
+            ),
+            ElevatedButton(
+              onPressed: isSending ? null : () async {
+                final price = double.tryParse(priceController.text);
+                if (price == null || price <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter a valid price'), backgroundColor: Colors.red),
+                  );
+                  return;
+                }
+
+                setState(() => isSending = true);
+
+                // DEBUG: Print what we're sending
+                print('🔄 SENDING COUNTER OFFER:');
+                print('   offerId: ${offer.id}');
+                print('   price: $price');
+                print('   message: ${messageController.text.isNotEmpty ? messageController.text : 'none'}');
+
+                try {
+                  final result = await ApiService.counterOffer(
+                    offerId: offer.id,
+                    price: price,
+                    message: messageController.text.isNotEmpty ? messageController.text : null,
+                  );
+
+                  // DEBUG: Print the result
+                  print('📡 COUNTER OFFER RESULT: $result');
+
+                  if (result['success'] == true) {
+                    print('✅ Counter offer sent successfully!');
+                    widget.onOfferUpdated();
+                    if (mounted) {
+                      Navigator.pop(dialogContext); // Close counter dialog
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Counter offer sent'), backgroundColor: Colors.green),
+                      );
+                      // Don't close the conversation screen - just refresh
+                    }
+                  } else {
+                    print('❌ Counter offer failed: ${result['error']}');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(result['error'] ?? 'Failed to send counter offer'), backgroundColor: Colors.red),
+                    );
+                  }
+                } catch (e) {
+                  print('❌ Exception in counter offer: $e');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                  );
+                } finally {
+                  if (mounted) {
+                    setState(() => isSending = false);
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+              child: isSending
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('SEND COUNTER'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
 
     void _showError(String message) {
       if (mounted) {
@@ -743,7 +763,10 @@ Future<void> _loadCurrentUser() async {
                   ),
                   title: const Text('Counter Offer'),
                   subtitle: const Text('Send a counter offer'),
-                  onTap: () => _showCounterDialog(offer),
+                   onTap: () {
+      Navigator.pop(context); // Close bottom sheet first
+      _showCounterDialog(offer);
+    },
                 ),
             ],
           ),
